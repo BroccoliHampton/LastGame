@@ -1,19 +1,20 @@
 const express = require('express');
 const app = express();
 
-// A simple Farcaster Frame HTML response
-app.post('/api/index', (req, res) => {
+// DEBUGGING CHANGE: Using app.all() to accept both GET and POST requests.
+// Farcaster frames use POST, but this will help us debug routing issues.
+app.all('/api/index', (req, res) => {
     const html = `
         <!DOCTYPE html>
         <html>
         <head>
             <meta property="fc:frame" content="vNext" />
-            <meta property="fc:frame:image" content="[https://placehold.co/800x600/000000/FFFFFF?text=Hello+World](https://placehold.co/800x600/000000/FFFFFF?text=Hello+World)" />
-            <meta property="og:image" content="[https://placehold.co/800x600/000000/FFFFFF?text=Hello+World](https://placehold.co/800x600/000000/FFFFFF?text=Hello+World)" />
-            <meta property="fc:frame:button:1" content="Click Me!" />
+            <meta property="fc:frame:image" content="https://placehold.co/800x600/000000/FFFFFF?text=Success!" />
+            <meta property="og:image" content="https://placehold.co/800x600/000000/FFFFFF?text=Success!" />
+            <meta property="fc:frame:button:1" content="It Works!" />
         </head>
         <body>
-            <h1>My First Frame Server</h1>
+            <h1>My First Frame Server is Running!</h1>
         </body>
         </html>
     `;
