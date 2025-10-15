@@ -1,8 +1,5 @@
 {
   "rewrites": [
-    {
-      "source": "/api/index",
-      "destination": "/api/index"
-    }
+    { "source": "/api/(.*)", "destination": "/api" }
   ]
 }
