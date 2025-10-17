@@ -1,8 +1,8 @@
 const express = require('express');
 const app = express();
 
-// This is a minimal Frame HTML with a known-good image URL.
-// It uses no environment variables and makes no external calls.
+// This is the corrected minimal Frame HTML.
+// The image URLs are now correctly formatted as plain strings.
 const testFrameHtml = `
     <!DOCTYPE html>
     <html>
@@ -18,9 +18,7 @@ const testFrameHtml = `
 // This route will now handle all requests to /api/*
 app.all('/api/index', async (req, res) => {
     try {
-        console.log("--- Serving minimal test frame ---");
-        // Log the exact HTML being sent for debugging
-        console.log("[DEBUG] Sending HTML:", testFrameHtml);
+        console.log("--- Serving minimal test frame (Corrected) ---");
         res.setHeader('Content-Type', 'text/html');
         res.status(200).send(testFrameHtml);
     } catch (e) {
