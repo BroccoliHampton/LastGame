@@ -1,6 +1,7 @@
 const express = require('express');
 const { NeynarAPIClient } = require("@neynar/nodejs-sdk");
 const { ethers } = require("ethers");
+const { kv } = require('@vercel/kv');
 const app = express();
 app.use(express.json());
 
@@ -10,47 +11,68 @@ const PUBLIC_URL = process.env.PUBLIC_URL;
 const GAME_URL = process.env.GAME_URL;
 const YOUR_WALLET_ADDRESS = process.env.YOUR_WALLET_ADDRESS;
 const BASE_PROVIDER_URL = process.env.BASE_PROVIDER_URL;
-const START_IMAGE_URL = process.env.START_IMAGE_URL;
-const SUCCESS_IMAGE_URL = process.env.SUCCESS_IMAGE_URL;
-const FAILED_IMAGE_URL = process.env.FAILED_IMAGE_URL;
+
+// --- A self-contained, Base64-encoded image to use as a Data URI ---
+const TEST_IMAGE_DATA_URI = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAyAAAAJYCAYAAACadoJwAAAAAXNSR0IArs4c6QAAADhlWElmTU0AKgAAAAgAAYdpAAQAAAABAAAAGgAAAAAAAqACAAQAAAABAAADAKADAAQAAAABAAAJYAAAAACbQBVbAAABVUlEQVR4Ae3BMQEAAADCoPVPbQwfoAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD4Z0EyAAGt0lWTAAAAAElFTkSuQmCC";
 
 let neynarClient;
 let provider;
 
-// --- ROUTE 1: The "Front Door" (Always shows the payment button) ---
+// --- ROUTE 1: The "Front Door" ---
 app.all('/api/index', async (req, res) => {
     try {
-        // This route now *always* presents the option to pay.
-        const html = createPaymentFrame(START_IMAGE_URL, PUBLIC_URL);
+        if (!neynarClient) neynarClient = new NeynarAPIClient(NEYNAR_API_KEY);
+        if (!provider) provider = new ethers.providers.JsonRpcProvider(BASE_PROVIDER_URL);
+
+        const validation = req.body.trustedData ? await neynarClient.validateFrameAction(req.body.trustedData.messageBytes) : null;
+        const fid = validation ? validation.action.interactor.fid : null;
+
+        let hasPaid = false;
+        if (fid) {
+            hasPaid = await kv.get(`paid:${fid}`);
+        }
+
+        let html;
+        if (hasPaid) {
+            html = createRedirectFrame(TEST_IMAGE_DATA_URI, GAME_URL);
+        } else {
+            html = createPaymentFrame(TEST_IMAGE_DATA_URI, PUBLIC_URL);
+        }
+        
         res.setHeader('Content-Type', 'text/html');
         res.status(200).send(html);
+
     } catch (e) {
-        console.error("Error in /api/index:", e);
-        res.status(500).send(`Server Error: ${e.message}`);
+        res.status(500).send(`Server Error in /api/index: ${e.message}`);
     }
 });
 
-// --- ROUTE 2: The Transaction Definition (Updated to $0.25) ---
+// --- Other routes remain the same ---
 const usdcAbi = ["function transfer(address to, uint256 amount)"];
 const usdcInterface = new ethers.utils.Interface(usdcAbi);
 const USDC_CONTRACT_ADDRESS_BASE = "0x833589fCD6eDb6E08f4c7C32D4f71b54bda02913";
 
+app.post('/api/transaction', async (req, res) => { /* ... same as before ... */ });
+app.post('/api/verify', async (req, res) => { /* ... same as before ... */ });
+function createRedirectFrame(imageUrl, targetUrl) { /* ... same as before ... */ }
+function createPaymentFrame(imageUrl, publicUrl) { /* ... same as before ... */ }
+function createRetryFrame(imageUrl, publicUrl) { /* ... same as before ... */ }
+
+// --- Full helper function implementations ---
 app.post('/api/transaction', async (req, res) => {
     try {
-        // Amount: 0.25 USDC (250,000 wei, since USDC has 6 decimals)
-        const amount = ethers.BigNumber.from("250000"); 
+        const amount = ethers.BigNumber.from("1000000");
         const calldata = usdcInterface.encodeFunctionData("transfer", [YOUR_WALLET_ADDRESS, amount]);
         res.status(200).json({
-            chainId: "eip155:8453", // Base Mainnet
+            chainId: "eip155:8453",
             method: "eth_sendTransaction",
             params: { abi: usdcAbi, to: USDC_CONTRACT_ADDRESS_BASE, data: calldata, value: "0" },
         });
     } catch (error) {
-        res.status(500).send(`Server Error: ${error.message}`);
+        res.status(500).send(`Server Error in /api/transaction: ${error.message}`);
     }
 });
 
-// --- ROUTE 3: The Payment Verification (No database needed) ---
 app.post('/api/verify', async (req, res) => {
     try {
         if (!neynarClient) neynarClient = new NeynarAPIClient(NEYNAR_API_KEY);
@@ -58,28 +80,20 @@ app.post('/api/verify', async (req, res) => {
 
         const validation = await neynarClient.validateFrameAction(req.body.trustedData.messageBytes);
         const txHash = validation.action.transaction.hash;
-
+        const fid = validation.action.interactor.fid;
         const receipt = await provider.getTransactionReceipt(txHash);
 
         if (receipt && receipt.status === 1) {
-            // Payment successful, show the redirect button.
-            res.send(createRedirectFrame(SUCCESS_IMAGE_URL, GAME_URL));
+            await kv.set(`paid:${fid}`, true);
+            res.send(createRedirectFrame(TEST_IMAGE_DATA_URI, GAME_URL));
         } else {
-            // Payment failed, show the retry button.
-            res.send(createRetryFrame(FAILED_IMAGE_URL, PUBLIC_URL));
+            res.send(createRetryFrame(TEST_IMAGE_DATA_URI, PUBLIC_URL));
         }
     } catch (e) {
-        res.status(500).send(`Server Error: ${e.message}`);
+        res.status(500).send(`Server Error in /api/verify: ${e.message}`);
     }
 });
 
-
-// --- HTML Frame Generation Helpers ---
-function createRedirectFrame(imageUrl, targetUrl) { /* ... same as before ... */ }
-function createPaymentFrame(imageUrl, publicUrl) { /* ... same as before, but with updated button text ... */ }
-function createRetryFrame(imageUrl, publicUrl) { /* ... same as before ... */ }
-
-// Helper function implementations (copy these as well)
 function createRedirectFrame(imageUrl, targetUrl) {
     return `
         <!DOCTYPE html><html><head>
@@ -98,7 +112,7 @@ function createPaymentFrame(imageUrl, publicUrl) {
             <meta property="fc:frame" content="vNext" />
             <meta property="fc:frame:image" content="${imageUrl}" />
             <meta property="og:image" content="${imageUrl}" />
-            <meta property="fc:frame:button:1" content="Pay $0.25 USDC to Play" />
+            <meta property="fc:frame:button:1" content="Pay $1.00 USDC to Play" />
             <meta property="fc:frame:button:1:action" content="tx" />
             <meta property="fc:frame:button:1:target" content="${publicUrl}/api/transaction" />
             <meta property="fc:frame:post_url" content="${publicUrl}/api/verify" />
