@@ -19,6 +19,8 @@ const testFrameHtml = `
 app.all('/api/index', async (req, res) => {
     try {
         console.log("--- Serving minimal test frame ---");
+        // Log the exact HTML being sent for debugging
+        console.log("[DEBUG] Sending HTML:", testFrameHtml);
         res.setHeader('Content-Type', 'text/html');
         res.status(200).send(testFrameHtml);
     } catch (e) {
