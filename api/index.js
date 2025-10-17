@@ -18,9 +18,10 @@ const BASE_PROVIDER_URL = process.env.BASE_PROVIDER_URL;
 const neynarClient = new NeynarAPIClient(NEYNAR_API_KEY);
 const provider = new ethers.providers.JsonRpcProvider(BASE_PROVIDER_URL);
 
-// --- ROUTE 1: The "Front Door" ---
-app.post('/api/index', async (req, res) => {
+// --- ROUTE 1: The "Front Door" (Handles both GET and POST) ---
+app.all('/api/index', async (req, res) => {
     try {
+        // The body will be empty on a GET request, so we handle that.
         const validation = req.body.trustedData ? await neynarClient.validateFrameAction(req.body.trustedData.messageBytes) : null;
         const fid = validation ? validation.action.interactor.fid : null;
 
