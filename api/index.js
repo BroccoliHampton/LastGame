@@ -7,16 +7,13 @@ app.use(express.json());
 
 // --- CONFIGURATION ---
 const NEYNAR_API_KEY = process.env.NEYNAR_API_KEY;
-// Use our new, reliable public URL variable
 const PUBLIC_URL = process.env.PUBLIC_URL;
 const GAME_URL = process.env.GAME_URL;
 const YOUR_WALLET_ADDRESS = process.env.YOUR_WALLET_ADDRESS;
 const BASE_PROVIDER_URL = process.env.BASE_PROVIDER_URL;
-
-// --- TEMPORARY TEST IMAGE URLS ---
-const START_IMAGE_URL = "[https://placehold.co/800x600/110515/FFFFFF?text=Last+Game](https://placehold.co/800x600/110515/FFFFFF?text=Last+Game)";
-const SUCCESS_IMAGE_URL = "[https://placehold.co/800x600/110515/FFFFFF?text=Payment+Successful](https://placehold.co/800x600/110515/FFFFFF?text=Payment+Successful)!";
-const FAILED_IMAGE_URL = "[https://placehold.co/800x600/110515/FFFFFF?text=Payment+Failed](https://placehold.co/800x600/110515/FFFFFF?text=Payment+Failed)";
+const START_IMAGE_URL = process.env.START_IMAGE_URL;
+const SUCCESS_IMAGE_URL = process.env.SUCCESS_IMAGE_URL;
+const FAILED_IMAGE_URL = process.env.FAILED_IMAGE_URL;
 
 let neynarClient;
 let provider;
@@ -44,8 +41,6 @@ app.all('/api/index', async (req, res) => {
         res.status(500).send(`Server Error in /api/index: ${e.message}`);
     }
 });
-
-// ... (The rest of your transaction and verify routes remain the same) ...
 
 const usdcAbi = ["function transfer(address to, uint256 amount)"];
 const usdcInterface = new ethers.utils.Interface(usdcAbi);
@@ -86,9 +81,19 @@ app.post('/api/verify', async (req, res) => {
     }
 });
 
-function createRedirectFrame(imageUrl, targetUrl) { /* ... same helper ... */ }
+function createRedirectFrame(imageUrl, targetUrl) {
+    return `
+        <!DOCTYPE html><html><head>
+            <meta property="fc:frame" content="vNext" />
+            <meta property="fc:frame:image" content="${imageUrl}" />
+            <meta property="og:image" content="${imageUrl}" />
+            <meta property="fc:frame:button:1" content="Launch Game" />
+            <meta property="fc:frame:button:1:action" content="link" />
+            <meta property="fc:frame:button:1:target" content="${targetUrl}" />
+        </head></html>`;
+}
+
 function createPaymentFrame(imageUrl, publicUrl) {
-    // This function now uses the reliable PUBLIC_URL
     const html = `
         <!DOCTYPE html><html><head>
             <meta property="fc:frame" content="vNext" />
@@ -101,6 +106,17 @@ function createPaymentFrame(imageUrl, publicUrl) {
         </head></html>`;
     return html;
 }
-function createRetryFrame(imageUrl, publicUrl) { /* ... same helper ... */ }
+
+function createRetryFrame(imageUrl, publicUrl) {
+    const html = `
+        <!DOCTYPE html><html><head>
+            <meta property="fc:frame" content="vNext" />
+            <meta property="fc:frame:image" content="${imageUrl}" />
+            <meta property="og:image" content="${imageUrl}" />
+            <meta property="fc:frame:button:1" content="Retry Payment" />
+            <meta property="fc:frame:post_url" content="${publicUrl}/api/index" />
+        </head></html>`;
+    return html;
+}
 
 module.exports = app;
