@@ -15,13 +15,25 @@ const FAILED_IMAGE_URL = process.env.FAILED_IMAGE_URL;
 const YOUR_WALLET_ADDRESS = process.env.YOUR_WALLET_ADDRESS;
 const BASE_PROVIDER_URL = process.env.BASE_PROVIDER_URL;
 
+// --- TEMPORARY DEBUGGING LOGS ---
+// These will print the values of your environment variables to the Vercel logs.
+console.log("--- SERVER STARTING ---");
+console.log(`[DEBUG] NEYNAR_API_KEY exists: ${!!NEYNAR_API_KEY}`);
+console.log(`[DEBUG] YOUR_WALLET_ADDRESS: ${YOUR_WALLET_ADDRESS}`);
+console.log(`[DEBUG] BASE_PROVIDER_URL: ${BASE_PROVIDER_URL}`);
+console.log(`[DEBUG] GAME_URL: ${GAME_URL}`);
+console.log(`[DEBUG] START_IMAGE_URL: ${START_IMAGE_URL}`);
+console.log(`[DEBUG] SUCCESS_IMAGE_URL: ${SUCCESS_IMAGE_URL}`);
+console.log(`[DEBUG] FAILED_IMAGE_URL: ${FAILED_IMAGE_URL}`);
+console.log("--- CONFIGURATION LOADED ---");
+
+
 const neynarClient = new NeynarAPIClient(NEYNAR_API_KEY);
 const provider = new ethers.providers.JsonRpcProvider(BASE_PROVIDER_URL);
 
 // --- ROUTE 1: The "Front Door" (Handles both GET and POST) ---
 app.all('/api/index', async (req, res) => {
     try {
-        // The body will be empty on a GET request, so we handle that.
         const validation = req.body.trustedData ? await neynarClient.validateFrameAction(req.body.trustedData.messageBytes) : null;
         const fid = validation ? validation.action.interactor.fid : null;
 
@@ -36,7 +48,8 @@ app.all('/api/index', async (req, res) => {
             res.send(createPaymentFrame(START_IMAGE_URL, VERCEL_URL));
         }
     } catch (e) {
-        res.status(500).send("Server Error in /api/index");
+        console.error("Error in /api/index:", e);
+        res.status(500).send(`Server Error in /api/index: ${e.message}`);
     }
 });
 
@@ -61,7 +74,8 @@ app.post('/api/transaction', async (req, res) => {
             },
         });
     } catch (error) {
-        res.status(500).send("Server Error in /api/transaction");
+        console.error("Error in /api/transaction:", error);
+        res.status(500).send(`Server Error in /api/transaction: ${error.message}`);
     }
 });
 
@@ -81,7 +95,8 @@ app.post('/api/verify', async (req, res) => {
             res.send(createRetryFrame(FAILED_IMAGE_URL, VERCEL_URL));
         }
     } catch (e) {
-        res.status(500).send("Server Error in /api/verify");
+        console.error("Error in /api/verify:", e);
+        res.status(500).send(`Server Error in /api/verify: ${e.message}`);
     }
 });
 
@@ -125,3 +140,4 @@ function createRetryFrame(imageUrl, vercelUrl) {
 
 // This is the Vercel entry point.
 module.exports = app;
+
