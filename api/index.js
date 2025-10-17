@@ -1,17 +1,3 @@
-Problem: Persistent Vercel Routing Errors
-
-The "Cannot GET" error is persisting because Vercel is struggling to correctly route requests between the multiple files in our api directory.
-
-The Solution: A Single, Unified Server File
-
-The most reliable and standard way to fix this is to consolidate all our server logic into a single entry point: api/index.js. This file will handle all routes (/api/index, /api/transaction, and /api/verify), removing any chance for Vercel's router to get confused.
-
-Step 1: Update Your vercel.json File
-
-First, let's simplify your vercel.json file. This new version tells Vercel that every request starting with /api/ should be handled by the api/index.js file.
-
-Go to your GitHub repository, edit vercel.json, and replace its content with this:
-
 {
   "rewrites": [
     {
