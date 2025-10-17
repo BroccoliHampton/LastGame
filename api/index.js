@@ -21,24 +21,41 @@ let provider;
 // --- ROUTE 1: The "Front Door" (Handles both GET and POST) ---
 app.all('/api/index', async (req, res) => {
     try {
+        console.log("--- Request received at /api/index ---");
+
+        if (!NEYNAR_API_KEY) throw new Error("NEYNAR_API_KEY is not set");
+        if (!BASE_PROVIDER_URL) throw new Error("BASE_PROVIDER_URL is not set");
+        
         if (!neynarClient) neynarClient = new NeynarAPIClient(NEYNAR_API_KEY);
         if (!provider) provider = new ethers.providers.JsonRpcProvider(BASE_PROVIDER_URL);
+        console.log("[DEBUG] Clients initialized.");
 
         const validation = req.body.trustedData ? await neynarClient.validateFrameAction(req.body.trustedData.messageBytes) : null;
         const fid = validation ? validation.action.interactor.fid : null;
+        console.log(fid ? `[DEBUG] Validated request for FID: ${fid}` : "[DEBUG] Initial GET request or invalid message.");
 
         let hasPaid = false;
         if (fid) {
+            console.log("[DEBUG] Checking KV store for payment status...");
             hasPaid = await kv.get(`paid:${fid}`);
+            console.log(`[DEBUG] KV store returned: ${hasPaid}`);
         }
 
+        let html;
         if (hasPaid) {
-            res.send(createRedirectFrame(START_IMAGE_URL, GAME_URL));
+            console.log("[DEBUG] User has paid. Generating redirect frame.");
+            html = createRedirectFrame(START_IMAGE_URL, GAME_URL);
         } else {
-            res.send(createPaymentFrame(START_IMAGE_URL, PUBLIC_URL));
+            console.log("[DEBUG] User has not paid. Generating payment frame.");
+            html = createPaymentFrame(START_IMAGE_URL, PUBLIC_URL);
         }
+        
+        console.log("[DEBUG] Sending HTML:", html);
+        res.setHeader('Content-Type', 'text/html');
+        res.status(200).send(html);
+
     } catch (e) {
-        console.error("Error in /api/index:", e);
+        console.error("--- ERROR IN /api/index ---", e);
         res.status(500).send(`Server Error in /api/index: ${e.message}`);
     }
 });
@@ -50,14 +67,18 @@ const USDC_CONTRACT_ADDRESS_BASE = "0x833589fCD6eDb6E08f4c7C32D4f71b54bda02913";
 
 app.post('/api/transaction', async (req, res) => {
     try {
+        console.log("--- Request received at /api/transaction ---");
         const amount = ethers.BigNumber.from("1000000"); // 1.00 USDC
         const calldata = usdcInterface.encodeFunctionData("transfer", [YOUR_WALLET_ADDRESS, amount]);
-        res.status(200).json({
+        const tx_details = {
             chainId: "eip155:8453",
             method: "eth_sendTransaction",
             params: { abi: usdcAbi, to: USDC_CONTRACT_ADDRESS_BASE, data: calldata, value: "0" },
-        });
+        };
+        console.log("[DEBUG] Sending transaction details:", tx_details);
+        res.status(200).json(tx_details);
     } catch (error) {
+        console.error("--- ERROR IN /api/transaction ---", error);
         res.status(500).send(`Server Error in /api/transaction: ${error.message}`);
     }
 });
@@ -65,21 +86,32 @@ app.post('/api/transaction', async (req, res) => {
 // --- ROUTE 3: The Payment Verification ---
 app.post('/api/verify', async (req, res) => {
     try {
+        console.log("--- Request received at /api/verify ---");
         if (!neynarClient) neynarClient = new NeynarAPIClient(NEYNAR_API_KEY);
         if (!provider) provider = new ethers.providers.JsonRpcProvider(BASE_PROVIDER_URL);
 
         const validation = await neynarClient.validateFrameAction(req.body.trustedData.messageBytes);
         const txHash = validation.action.transaction.hash;
         const fid = validation.action.interactor.fid;
+        console.log(`[DEBUG] Verifying transaction ${txHash} for FID: ${fid}`);
+
         const receipt = await provider.getTransactionReceipt(txHash);
 
+        let html;
         if (receipt && receipt.status === 1) {
+            console.log("[DEBUG] Transaction successful. Updating KV store.");
             await kv.set(`paid:${fid}`, true);
-            res.send(createRedirectFrame(SUCCESS_IMAGE_URL, GAME_URL));
+            html = createRedirectFrame(SUCCESS_IMAGE_URL, GAME_URL);
         } else {
-            res.send(createRetryFrame(FAILED_IMAGE_URL, PUBLIC_URL));
+            console.log("[DEBUG] Transaction failed or not found.");
+            html = createRetryFrame(FAILED_IMAGE_URL, PUBLIC_URL);
         }
+        
+        console.log("[DEBUG] Sending HTML:", html);
+        res.setHeader('Content-Type', 'text/html');
+        res.status(200).send(html);
     } catch (e) {
+        console.error("--- ERROR IN /api/verify ---", e);
         res.status(500).send(`Server Error in /api/verify: ${e.message}`);
     }
 });
