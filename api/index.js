@@ -1,19 +1,3 @@
-{
-  "rewrites": [
-    {
-      "source": "/api/:path*",
-      "destination": "/api/index.js"
-    }
-  ]
-}
-
-
-Step 2: Update Your api/index.js File
-
-Next, replace the entire content of your api/index.js file with the new, unified code below. This single file now contains all the logic that was previously split across three files.
-
-Go to your GitHub repository, edit api/index.js, and replace its content with this:
-
 const express = require('express');
 const { NeynarAPIClient } = require("@neynar/nodejs-sdk");
 const { ethers } = require("ethers");
