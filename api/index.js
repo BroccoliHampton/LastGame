@@ -25,6 +25,7 @@ let provider;
 // --- ROUTE 1: The "Front Door" (Handles both GET and POST) ---
 app.all('/api/index', async (req, res) => {
     try {
+        console.log("--- Request received at /api/index ---");
         if (!neynarClient) neynarClient = new NeynarAPIClient(NEYNAR_API_KEY);
         if (!provider) provider = new ethers.providers.JsonRpcProvider(BASE_PROVIDER_URL);
 
@@ -37,9 +38,15 @@ app.all('/api/index', async (req, res) => {
         }
 
         if (hasPaid) {
-            res.send(createRedirectFrame(START_IMAGE_URL, GAME_URL));
+            console.log("[DEBUG] User has paid. Generating redirect frame.");
+            const html = createRedirectFrame(START_IMAGE_URL, GAME_URL);
+            console.log("[DEBUG] Sending HTML:", html);
+            res.send(html);
         } else {
-            res.send(createPaymentFrame(START_IMAGE_URL, VERCEL_URL));
+            console.log("[DEBUG] User has not paid. Generating payment frame.");
+            const html = createPaymentFrame(START_IMAGE_URL, VERCEL_URL);
+            console.log("[DEBUG] Sending HTML:", html);
+            res.send(html);
         }
     } catch (e) {
         console.error("Error in /api/index:", e);
@@ -54,10 +61,10 @@ const USDC_CONTRACT_ADDRESS_BASE = "0x833589fCD6eDb6E08f4c7C32D4f71b54bda02913";
 
 app.post('/api/transaction', async (req, res) => {
     try {
+        console.log("--- Request received at /api/transaction ---");
         const amount = ethers.BigNumber.from("1000000"); // 1.00 USDC
         const calldata = usdcInterface.encodeFunctionData("transfer", [YOUR_WALLET_ADDRESS, amount]);
-
-        res.status(200).json({
+        const tx_details = {
             chainId: "eip155:8453",
             method: "eth_sendTransaction",
             params: {
@@ -66,7 +73,9 @@ app.post('/api/transaction', async (req, res) => {
                 data: calldata,
                 value: "0",
             },
-        });
+        };
+        console.log("[DEBUG] Sending transaction details:", tx_details);
+        res.status(200).json(tx_details);
     } catch (error) {
         console.error("Error in /api/transaction:", error);
         res.status(500).send(`Server Error in /api/transaction: ${error.message}`);
@@ -76,6 +85,7 @@ app.post('/api/transaction', async (req, res) => {
 // --- ROUTE 3: The Payment Verification ---
 app.post('/api/verify', async (req, res) => {
     try {
+        console.log("--- Request received at /api/verify ---");
         if (!neynarClient) neynarClient = new NeynarAPIClient(NEYNAR_API_KEY);
         if (!provider) provider = new ethers.providers.JsonRpcProvider(BASE_PROVIDER_URL);
 
@@ -87,9 +97,13 @@ app.post('/api/verify', async (req, res) => {
 
         if (receipt && receipt.status === 1) {
             await kv.set(`paid:${fid}`, true);
-            res.send(createRedirectFrame(SUCCESS_IMAGE_URL, GAME_URL));
+            const html = createRedirectFrame(SUCCESS_IMAGE_URL, GAME_URL);
+            console.log("[DEBUG] Sending HTML:", html);
+            res.send(html);
         } else {
-            res.send(createRetryFrame(FAILED_IMAGE_URL, VERCEL_URL));
+            const html = createRetryFrame(FAILED_IMAGE_URL, VERCEL_URL);
+            console.log("[DEBUG] Sending HTML:", html);
+            res.send(html);
         }
     } catch (e) {
         console.error("Error in /api/verify:", e);
@@ -100,7 +114,7 @@ app.post('/api/verify', async (req, res) => {
 
 // --- HTML Frame Generation Helpers ---
 function createRedirectFrame(imageUrl, targetUrl) {
-    return `
+    const html = `
         <!DOCTYPE html><html><head>
             <meta property="fc:frame" content="vNext" />
             <meta property="fc:frame:image" content="${imageUrl}" />
@@ -109,10 +123,11 @@ function createRedirectFrame(imageUrl, targetUrl) {
             <meta property="fc:frame:button:1:action" content="link" />
             <meta property="fc:frame:button:1:target" content="${targetUrl}" />
         </head></html>`;
+    return html;
 }
 
 function createPaymentFrame(imageUrl, vercelUrl) {
-    return `
+    const html = `
         <!DOCTYPE html><html><head>
             <meta property="fc:frame" content="vNext" />
             <meta property="fc:frame:image" content="${imageUrl}" />
@@ -122,10 +137,11 @@ function createPaymentFrame(imageUrl, vercelUrl) {
             <meta property="fc:frame:button:1:target" content="https://${vercelUrl}/api/transaction" />
             <meta property="fc:frame:post_url" content="https://${vercelUrl}/api/verify" />
         </head></html>`;
+    return html;
 }
 
 function createRetryFrame(imageUrl, vercelUrl) {
-    return `
+    const html = `
         <!DOCTYPE html><html><head>
             <meta property="fc:frame" content="vNext" />
             <meta property="fc:frame:image" content="${imageUrl}" />
@@ -133,6 +149,7 @@ function createRetryFrame(imageUrl, vercelUrl) {
             <meta property="fc:frame:button:1" content="Retry Payment" />
             <meta property="fc:frame:post_url" content="https://${vercelUrl}/api/index" />
         </head></html>`;
+    return html;
 }
 
 // This is the Vercel entry point.
