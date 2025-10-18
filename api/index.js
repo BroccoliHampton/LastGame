@@ -8,6 +8,24 @@ module.exports = async function handler(req, res) {
     console.log("[v0] Using START_IMAGE_URL:", START_IMAGE_URL)
     console.log("[v0] Using PUBLIC_URL:", PUBLIC_URL)
 
+    const miniAppEmbed = {
+      version: "1",
+      imageUrl: START_IMAGE_URL,
+      button: {
+        title: "Pay 0.25 USDC to Play",
+        action: {
+          type: "launch_frame",
+          name: "Payment Frame",
+          url: `${PUBLIC_URL}/api/payment-frame`,
+          splashImageUrl: START_IMAGE_URL,
+          splashBackgroundColor: "#1a1a1a",
+        },
+      },
+    }
+
+    const serializedEmbed = JSON.stringify(miniAppEmbed)
+    console.log("[v0] Mini App Embed:", serializedEmbed)
+
     const html = `<!DOCTYPE html>
 <html>
 <head>
@@ -15,13 +33,9 @@ module.exports = async function handler(req, res) {
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Payment Frame</title>
   
-  <!-- Farcaster Frame Meta Tags -->
-  <meta property="fc:frame" content="vNext" />
-  <meta property="fc:frame:image" content="${START_IMAGE_URL}" />
-  <meta property="fc:frame:image:aspect_ratio" content="1:1" />
-  <meta property="fc:frame:button:1" content="Test Button" />
-  <meta property="fc:frame:button:1:action" content="post" />
-  <meta property="fc:frame:post_url" content="${PUBLIC_URL}/api/index" />
+  <!-- Farcaster Mini App Meta Tag -->
+  <meta property="fc:miniapp" content='${serializedEmbed}' />
+  <meta property="fc:frame" content='${serializedEmbed}' />
   
   <!-- Open Graph Meta Tags -->
   <meta property="og:title" content="Payment Frame" />
@@ -29,15 +43,14 @@ module.exports = async function handler(req, res) {
   <meta property="og:image" content="${START_IMAGE_URL}" />
 </head>
 <body>
-  <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; font-family: sans-serif;">
+  <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; font-family: sans-serif; background: #1a1a1a; color: white;">
     <h1>Payment Required</h1>
-    <p>Testing button rendering - you should see a "Test Button" below</p>
+    <p>Click the button below to pay 0.25 USDC and start playing!</p>
   </div>
 </body>
 </html>`
 
-    console.log("[v0] Generated HTML with test button")
-    console.log("[v0] Frame meta tags included")
+    console.log("[v0] Generated HTML with Mini App Embed format")
 
     res.setHeader("Content-Type", "text/html; charset=utf-8")
     res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate")
