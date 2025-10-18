@@ -4,7 +4,7 @@ const { ethers } = require("ethers");
 const app = express();
 app.use(express.json());
 
-// --- CONFIGURATION ---
+// --- CONFIGURATION (from Vercel Environment Variables) ---
 const NEYNAR_API_KEY = process.env.NEYNAR_API_KEY;
 const PUBLIC_URL = process.env.PUBLIC_URL;
 const GAME_URL = process.env.GAME_URL;
@@ -17,10 +17,9 @@ const FAILED_IMAGE_URL = process.env.FAILED_IMAGE_URL;
 let neynarClient;
 let provider;
 
-// --- ROUTE 1: The "Front Door" ---
+// --- ROUTE 1: The "Front Door" (Always shows the payment button) ---
 app.all('/api/index', async (req, res) => {
     try {
-        // This route now *always* presents the option to pay.
         const html = createPaymentFrame(START_IMAGE_URL, PUBLIC_URL);
         res.setHeader('Content-Type', 'text/html');
         res.status(200).send(html);
