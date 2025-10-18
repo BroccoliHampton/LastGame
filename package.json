@@ -1,5 +1,5 @@
 {
-  "name": "last-game-server-v2",
+  "name": "last-game",
   "version": "1.0.0",
   "dependencies": {
     "@neynar/nodejs-sdk": "^1.15.0",
