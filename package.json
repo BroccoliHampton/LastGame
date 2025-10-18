@@ -1,7 +1,10 @@
 {
-  "name": "last-game-frame-server",
+  "name": "last-game-server-v2",
   "version": "1.0.0",
   "dependencies": {
+    "@neynar/nodejs-sdk": "^1.15.0",
+    "@vercel/kv": "^1.0.1",
+    "ethers": "^5.7.2",
     "express": "^4.18.2"
   }
 }
