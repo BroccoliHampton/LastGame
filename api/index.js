@@ -1,6 +1,6 @@
 const { createPaymentFrame } = require("../lib/frame-helpers")
 
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
   try {
     // Validate environment variables
     const START_IMAGE_URL = process.env.START_IMAGE_URL
