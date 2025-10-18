@@ -120,7 +120,7 @@ module.exports = async function handler(req, res) {
         payButton.disabled = true
         
         console.log('[v0] Importing Farcaster SDK')
-        const { default: sdk } = await import('https://esm.sh/@farcaster/frame-sdk@0.0.5')
+        const { default: sdk } = await import('https://esm.sh/@farcaster/miniapp-sdk')
         
         console.log('[v0] SDK imported, calling ready()')
         await sdk.actions.ready()
