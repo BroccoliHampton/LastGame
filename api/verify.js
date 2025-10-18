@@ -6,7 +6,7 @@ const { createRedirectFrame, createRetryFrame } = require("../lib/frame-helpers"
 let neynarClient
 let provider
 
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
   // Only accept POST requests
   if (req.method !== "POST") {
     return res.status(405).send("Method not allowed")
