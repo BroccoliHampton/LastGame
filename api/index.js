@@ -1,7 +1,6 @@
 const express = require('express');
 const { NeynarAPIClient } = require("@neynar/nodejs-sdk");
 const { ethers } = require("ethers");
-const { kv } = require('@vercel/kv');
 const app = express();
 app.use(express.json());
 
@@ -11,9 +10,9 @@ const PUBLIC_URL = process.env.PUBLIC_URL;
 const GAME_URL = process.env.GAME_URL;
 const YOUR_WALLET_ADDRESS = process.env.YOUR_WALLET_ADDRESS;
 const BASE_PROVIDER_URL = process.env.BASE_PROVIDER_URL;
-const START_IMAGE_URL = process.env.START_IMAGE_URL || "[https://placehold.co/800x600/110515/FFFFFF?text=Last+Game](https://placehold.co/800x600/110515/FFFFFF?text=Last+Game)";
-const SUCCESS_IMAGE_URL = process.env.SUCCESS_IMAGE_URL || "[https://placehold.co/800x600/110515/FFFFFF?text=Payment+Successful](https://placehold.co/800x600/110515/FFFFFF?text=Payment+Successful)!";
-const FAILED_IMAGE_URL = process.env.FAILED_IMAGE_URL || "[https://placehold.co/800x600/110515/FFFFFF?text=Payment+Failed](https://placehold.co/800x600/110515/FFFFFF?text=Payment+Failed)";
+const START_IMAGE_URL = process.env.START_IMAGE_URL;
+const SUCCESS_IMAGE_URL = process.env.SUCCESS_IMAGE_URL;
+const FAILED_IMAGE_URL = process.env.FAILED_IMAGE_URL;
 
 let neynarClient;
 let provider;
@@ -21,22 +20,10 @@ let provider;
 // --- ROUTE 1: The "Front Door" ---
 app.all('/api/index', async (req, res) => {
     try {
-        if (!neynarClient) neynarClient = new NeynarAPIClient(NEYNAR_API_KEY);
-        if (!provider) provider = new ethers.providers.JsonRpcProvider(BASE_PROVIDER_URL);
-
-        const validation = req.body.trustedData ? await neynarClient.validateFrameAction(req.body.trustedData.messageBytes) : null;
-        const fid = validation ? validation.action.interactor.fid : null;
-
-        let hasPaid = false;
-        if (fid) {
-            hasPaid = await kv.get(`paid:${fid}`);
-        }
-
-        if (hasPaid) {
-            res.send(createRedirectFrame(START_IMAGE_URL, GAME_URL));
-        } else {
-            res.send(createPaymentFrame(START_IMAGE_URL, PUBLIC_URL));
-        }
+        // This route now *always* presents the option to pay.
+        const html = createPaymentFrame(START_IMAGE_URL, PUBLIC_URL);
+        res.setHeader('Content-Type', 'text/html');
+        res.status(200).send(html);
     } catch (e) {
         console.error("Error in /api/index:", e);
         res.status(500).send(`Server Error: ${e.message}`);
@@ -70,11 +57,10 @@ app.post('/api/verify', async (req, res) => {
 
         const validation = await neynarClient.validateFrameAction(req.body.trustedData.messageBytes);
         const txHash = validation.action.transaction.hash;
-        const fid = validation.action.interactor.fid;
+
         const receipt = await provider.getTransactionReceipt(txHash);
 
         if (receipt && receipt.status === 1) {
-            // For pay-per-play, we don't save the state. Just show success.
             res.send(createRedirectFrame(SUCCESS_IMAGE_URL, GAME_URL));
         } else {
             res.send(createRetryFrame(FAILED_IMAGE_URL, PUBLIC_URL));
@@ -85,11 +71,6 @@ app.post('/api/verify', async (req, res) => {
 });
 
 // --- HTML Frame Generation Helpers ---
-function createRedirectFrame(imageUrl, targetUrl) { /* ... implementation ... */ }
-function createPaymentFrame(imageUrl, publicUrl) { /* ... implementation ... */ }
-function createRetryFrame(imageUrl, publicUrl) { /* ... implementation ... */ }
-
-// Full helper function implementations
 function createRedirectFrame(imageUrl, targetUrl) {
     return `
         <!DOCTYPE html><html><head>
