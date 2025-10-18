@@ -111,66 +111,31 @@ module.exports = async function handler(req, res) {
     const payButton = document.getElementById('payButton')
     const statusDiv = document.getElementById('status')
     
-    // Test that button is accessible
-    console.log('[v0] Button element:', payButton)
-    
-    // Add immediate click handler for testing
     payButton.addEventListener('click', async () => {
       console.log('[v0] Button clicked!')
-      statusDiv.textContent = 'Button clicked! Initializing...'
+      statusDiv.textContent = 'Initializing payment...'
       statusDiv.className = 'status loading'
       
       try {
         payButton.disabled = true
         
-        // Import SDK
         console.log('[v0] Importing Farcaster SDK')
         const { default: sdk } = await import('https://esm.sh/@farcaster/frame-sdk@0.0.5')
         
         console.log('[v0] SDK imported, calling ready()')
         await sdk.actions.ready()
         
-        console.log('[v0] SDK ready, getting context')
-        const context = await sdk.context
-        console.log('[v0] Context:', context)
+        console.log('[v0] SDK ready, initiating sendToken')
+        statusDiv.textContent = 'Opening payment form...'
         
-        statusDiv.textContent = 'Preparing transaction...'
-        
-        // USDC contract address on Base
-        const USDC_ADDRESS = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913'
-        const YOUR_WALLET = '${YOUR_WALLET_ADDRESS}'
-        const AMOUNT = '250000' // 0.25 USDC (6 decimals)
-        
-        console.log('[v0] Getting Ethereum provider')
-        statusDiv.textContent = 'Connecting wallet...'
-        
-        const provider = sdk.wallet.ethProvider
-        
-        // Request accounts
-        const accounts = await provider.request({
-          method: 'eth_requestAccounts'
+        // Use sendToken action to send 0.25 USDC on Base
+        await sdk.actions.sendToken({
+          token: 'eip155:8453/erc20:0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913', // Base USDC
+          amount: '250000', // 0.25 USDC (6 decimals)
+          recipientAddress: '${YOUR_WALLET_ADDRESS}',
         })
         
-        console.log('[v0] Connected account:', accounts[0])
-        statusDiv.textContent = 'Please confirm transaction in wallet...'
-        
-        // ERC20 transfer function signature: transfer(address,uint256)
-        const transferData = '0xa9059cbb' + 
-          YOUR_WALLET.slice(2).padStart(64, '0') + 
-          parseInt(AMOUNT).toString(16).padStart(64, '0')
-        
-        console.log('[v0] Sending transaction')
-        const txHash = await provider.request({
-          method: 'eth_sendTransaction',
-          params: [{
-            to: USDC_ADDRESS,
-            data: transferData,
-            from: accounts[0],
-            chainId: '0x2105' // Base chain ID (8453 in hex)
-          }]
-        })
-        
-        console.log('[v0] Transaction sent:', txHash)
+        console.log('[v0] Payment initiated successfully')
         statusDiv.textContent = 'Payment successful! Redirecting...'
         statusDiv.className = 'status success'
         
@@ -189,7 +154,6 @@ module.exports = async function handler(req, res) {
     
     console.log('[v0] Click handler attached')
     statusDiv.textContent = 'Ready to pay'
-    statusDiv.className = 'status'
   </script>
 </body>
 </html>`
