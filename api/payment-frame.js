@@ -125,17 +125,48 @@ module.exports = async function handler(req, res) {
         console.log('[v0] SDK imported, calling ready()')
         await sdk.actions.ready()
         
-        console.log('[v0] SDK ready, initiating sendToken')
-        statusDiv.textContent = 'Opening payment form...'
+        console.log('[v0] Getting Ethereum provider')
+        const provider = await sdk.wallet.getEthereumProvider()
         
-        // Use sendToken action to send 0.25 USDC on Base
-        await sdk.actions.sendToken({
-          token: 'eip155:8453/erc20:0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913', // Base USDC
-          amount: '250000', // 0.25 USDC (6 decimals)
-          recipientAddress: '${YOUR_WALLET_ADDRESS}',
+        if (!provider) {
+          throw new Error('Wallet provider not available')
+        }
+        
+        console.log('[v0] Provider obtained, requesting accounts')
+        statusDiv.textContent = 'Connecting wallet...'
+        
+        // Get user's wallet address
+        const accounts = await provider.request({ method: 'eth_requestAccounts' })
+        const userAddress = accounts[0]
+        console.log('[v0] User address:', userAddress)
+        
+        statusDiv.textContent = 'Preparing transaction...'
+        
+        // USDC contract address on Base
+        const usdcAddress = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913'
+        const recipientAddress = '${YOUR_WALLET_ADDRESS}'
+        const amount = '250000' // 0.25 USDC (6 decimals)
+        
+        // Encode ERC20 transfer function call
+        // transfer(address to, uint256 amount)
+        const transferData = '0xa9059cbb' + 
+          recipientAddress.slice(2).padStart(64, '0') + 
+          parseInt(amount).toString(16).padStart(64, '0')
+        
+        console.log('[v0] Sending transaction')
+        statusDiv.textContent = 'Please confirm in your wallet...'
+        
+        const txHash = await provider.request({
+          method: 'eth_sendTransaction',
+          params: [{
+            from: userAddress,
+            to: usdcAddress,
+            data: transferData,
+            chainId: '0x2105' // Base chain ID (8453 in hex)
+          }]
         })
         
-        console.log('[v0] Payment initiated successfully')
+        console.log('[v0] Transaction sent:', txHash)
         statusDiv.textContent = 'Payment successful! Redirecting...'
         statusDiv.className = 'status success'
         
