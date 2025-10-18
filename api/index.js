@@ -1,39 +1,30 @@
 const express = require('express');
-const { NeynarAPIClient } = require("@neynar/nodejs-sdk");
-const { ethers } = require("ethers");
-const { kv } = require('@vercel/kv');
 const app = express();
-app.use(express.json());
 
-// CONFIGURATION
-const NEYNAR_API_KEY = process.env.NEYNAR_API_KEY;
-const PUBLIC_URL = process.env.PUBLIC_URL;
-const GAME_URL = process.env.GAME_URL;
-const YOUR_WALLET_ADDRESS = process.env.YOUR_WALLET_ADDRESS;
-const BASE_PROVIDER_URL = process.env.BASE_PROVIDER_URL;
+const testFrameHtml = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta property="fc:frame" content="vNext" />
+        <meta property="fc:frame:image" content="[https://placehold.co/800x600/22AA22/FFFFFF?text=Server+is+Responding](https://placehold.co/800x600/22AA22/FFFFFF?text=Server+is+Responding)!" />
+        <meta property="og:image" content="[https://placehold.co/800x600/22AA22/FFFFFF?text=Server+is+Responding](https://placehold.co/800x600/22AA22/FFFFFF?text=Server+is+Responding)!" />
+        <meta property="fc:frame:button:1" content="Success!" />
+    </head>
+    </html>
+`;
 
-const START_IMAGE_URL = "https://placehold.co/800x600/110515/FFFFFF?text=Last+Game";
-const SUCCESS_IMAGE_URL = "https://placehold.co/800x600/110515/FFFFFF?text=Payment+Successful!";
-const FAILED_IMAGE_URL = "https://placehold.co/800x600/110515/FFFFFF?text=Payment+Failed";
-
-let neynarClient;
-let provider;
-
-// ROUTE 1: The "Front Door"
-app.all('/api/index', async (req, res) => {
-    // ... (rest of the server code) ...
+// This route will handle all requests and respond immediately.
+app.all('/api/index', (req, res) => {
+    try {
+        console.log("--- Serving minimal test frame to diagnose timeout ---");
+        res.setHeader('Content-Type', 'text/html');
+        res.status(200).send(testFrameHtml);
+    } catch (e) {
+        console.error("Error in minimal test:", e);
+        res.status(500).send("Server Error");
+    }
 });
 
-// ROUTE 2: The Transaction Definition
-app.post('/api/transaction', async (req, res) => {
-    // ... (rest of the server code) ...
-});
-
-// ROUTE 3: The Payment Verification
-app.post('/api/verify', async (req, res) => {
-    // ... (rest of the server code) ...
-});
-
-// HELPER FUNCTIONS ...
-
+// This is the Vercel entry point.
 module.exports = app;
+
