@@ -4,7 +4,7 @@ const usdcAbi = ["function transfer(address to, uint256 amount)"]
 const usdcInterface = new ethers.utils.Interface(usdcAbi)
 const USDC_CONTRACT_ADDRESS_BASE = "0x833589fCD6eDb6E08f4c7C32D4f71b54bda02913"
 
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
   // Only accept POST requests
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" })
@@ -35,3 +35,4 @@ export default async function handler(req, res) {
     res.status(500).json({ error: `Server Error: ${error.message}` })
   }
 }
+
