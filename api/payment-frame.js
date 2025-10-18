@@ -53,10 +53,16 @@ module.exports = async function handler(req, res) {
       cursor: pointer;
       transition: transform 0.2s, box-shadow 0.2s;
       box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+      pointer-events: auto;
+      position: relative;
+      z-index: 10;
     }
     button:hover {
       transform: translateY(-2px);
       box-shadow: 0 6px 16px rgba(0,0,0,0.3);
+    }
+    button:active {
+      transform: translateY(0);
     }
     button:disabled {
       opacity: 0.6;
@@ -72,6 +78,9 @@ module.exports = async function handler(req, res) {
     }
     .success {
       color: #ccffcc;
+    }
+    .loading {
+      color: #ffffcc;
     }
   </style>
   
@@ -97,44 +106,67 @@ module.exports = async function handler(req, res) {
   </div>
 
   <script type="module">
-    import sdk from 'https://esm.sh/@farcaster/frame-sdk@0.0.1'
+    console.log('[v0] Payment frame script starting')
     
     const payButton = document.getElementById('payButton')
     const statusDiv = document.getElementById('status')
     
-    // Initialize the SDK
-    sdk.actions.ready()
+    // Test that button is accessible
+    console.log('[v0] Button element:', payButton)
     
-    // USDC contract address on Base
-    const USDC_ADDRESS = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913'
-    const YOUR_WALLET = '${YOUR_WALLET_ADDRESS}'
-    const AMOUNT = '250000' // 0.25 USDC (6 decimals)
-    
+    // Add immediate click handler for testing
     payButton.addEventListener('click', async () => {
+      console.log('[v0] Button clicked!')
+      statusDiv.textContent = 'Button clicked! Initializing...'
+      statusDiv.className = 'status loading'
+      
       try {
         payButton.disabled = true
+        
+        // Import SDK
+        console.log('[v0] Importing Farcaster SDK')
+        const { default: sdk } = await import('https://esm.sh/@farcaster/frame-sdk@0.0.5')
+        
+        console.log('[v0] SDK imported, calling ready()')
+        await sdk.actions.ready()
+        
+        console.log('[v0] SDK ready, getting context')
+        const context = await sdk.context
+        console.log('[v0] Context:', context)
+        
         statusDiv.textContent = 'Preparing transaction...'
-        statusDiv.className = 'status'
+        
+        // USDC contract address on Base
+        const USDC_ADDRESS = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913'
+        const YOUR_WALLET = '${YOUR_WALLET_ADDRESS}'
+        const AMOUNT = '250000' // 0.25 USDC (6 decimals)
         
         console.log('[v0] Getting Ethereum provider')
-        const provider = await sdk.wallet.ethProvider.request({
+        statusDiv.textContent = 'Connecting wallet...'
+        
+        const provider = sdk.wallet.ethProvider
+        
+        // Request accounts
+        const accounts = await provider.request({
           method: 'eth_requestAccounts'
         })
         
-        console.log('[v0] Sending USDC transfer transaction')
-        statusDiv.textContent = 'Please confirm in your wallet...'
+        console.log('[v0] Connected account:', accounts[0])
+        statusDiv.textContent = 'Please confirm transaction in wallet...'
         
-        // ERC20 transfer function signature
+        // ERC20 transfer function signature: transfer(address,uint256)
         const transferData = '0xa9059cbb' + 
           YOUR_WALLET.slice(2).padStart(64, '0') + 
           parseInt(AMOUNT).toString(16).padStart(64, '0')
         
-        const txHash = await sdk.wallet.ethProvider.request({
+        console.log('[v0] Sending transaction')
+        const txHash = await provider.request({
           method: 'eth_sendTransaction',
           params: [{
             to: USDC_ADDRESS,
             data: transferData,
-            from: provider[0]
+            from: accounts[0],
+            chainId: '0x2105' // Base chain ID (8453 in hex)
           }]
         })
         
@@ -149,11 +181,15 @@ module.exports = async function handler(req, res) {
         
       } catch (error) {
         console.error('[v0] Payment error:', error)
-        statusDiv.textContent = 'Payment failed: ' + error.message
+        statusDiv.textContent = 'Error: ' + (error.message || 'Payment failed')
         statusDiv.className = 'status error'
         payButton.disabled = false
       }
     })
+    
+    console.log('[v0] Click handler attached')
+    statusDiv.textContent = 'Ready to pay'
+    statusDiv.className = 'status'
   </script>
 </body>
 </html>`
