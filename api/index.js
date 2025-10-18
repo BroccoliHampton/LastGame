@@ -19,22 +19,27 @@ module.exports = async function handler(req, res) {
   <meta property="fc:frame" content="vNext" />
   <meta property="fc:frame:image" content="${START_IMAGE_URL}" />
   <meta property="fc:frame:image:aspect_ratio" content="1:1" />
-  <meta property="fc:frame:button:1" content="Pay to Play" />
+  <meta property="fc:frame:button:1" content="Pay 0.25 USDC to Play" />
   <meta property="fc:frame:button:1:action" content="tx" />
   <meta property="fc:frame:button:1:target" content="${PUBLIC_URL}/api/transaction" />
   <meta property="fc:frame:post_url" content="${PUBLIC_URL}/api/verify" />
   
   <!-- Open Graph Meta Tags -->
   <meta property="og:title" content="Payment Frame" />
+  <meta property="og:description" content="Pay to play the game" />
   <meta property="og:image" content="${START_IMAGE_URL}" />
 </head>
 <body>
-  <h1>Payment Frame</h1>
-  <p>This frame requires payment to play.</p>
+  <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; font-family: sans-serif;">
+    <h1>Payment Required</h1>
+    <p>Click the button below to pay 0.25 USDC and start playing!</p>
+  </div>
 </body>
 </html>`
 
     console.log("[v0] Generated HTML length:", html.length)
+    console.log("[v0] Button target:", `${PUBLIC_URL}/api/transaction`)
+    console.log("[v0] Post URL:", `${PUBLIC_URL}/api/verify`)
 
     res.setHeader("Content-Type", "text/html; charset=utf-8")
     res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate")
