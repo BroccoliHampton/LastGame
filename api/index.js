@@ -1,32 +1,48 @@
-const { createPaymentFrame } = require("../lib/frame-helpers")
-
 module.exports = async function handler(req, res) {
-  console.log("[v0] /api/index called")
-  console.log("[v0] Request method:", req.method)
-  console.log("[v0] Request headers:", JSON.stringify(req.headers))
+  console.log("[v0] /api/index called - Method:", req.method)
 
   try {
-    // Validate environment variables
-    const START_IMAGE_URL = process.env.START_IMAGE_URL
-    const PUBLIC_URL = process.env.PUBLIC_URL
+    const START_IMAGE_URL = process.env.START_IMAGE_URL || "https://i.imgur.com/IsUWL7j.png"
+    const PUBLIC_URL = process.env.PUBLIC_URL || "https://last-game-kappa.vercel.app"
 
-    console.log("[v0] START_IMAGE_URL:", START_IMAGE_URL ? "Set" : "Missing")
-    console.log("[v0] PUBLIC_URL:", PUBLIC_URL ? "Set" : "Missing")
+    console.log("[v0] Using START_IMAGE_URL:", START_IMAGE_URL)
+    console.log("[v0] Using PUBLIC_URL:", PUBLIC_URL)
 
-    if (!START_IMAGE_URL || !PUBLIC_URL) {
-      console.log("[v0] ERROR: Missing environment variables")
-      return res.status(500).send("Missing required environment variables")
-    }
+    const html = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Payment Frame</title>
+  
+  <!-- Farcaster Frame Meta Tags -->
+  <meta property="fc:frame" content="vNext" />
+  <meta property="fc:frame:image" content="${START_IMAGE_URL}" />
+  <meta property="fc:frame:image:aspect_ratio" content="1:1" />
+  <meta property="fc:frame:button:1" content="Pay to Play" />
+  <meta property="fc:frame:button:1:action" content="tx" />
+  <meta property="fc:frame:button:1:target" content="${PUBLIC_URL}/api/transaction" />
+  <meta property="fc:frame:post_url" content="${PUBLIC_URL}/api/verify" />
+  
+  <!-- Open Graph Meta Tags -->
+  <meta property="og:title" content="Payment Frame" />
+  <meta property="og:image" content="${START_IMAGE_URL}" />
+</head>
+<body>
+  <h1>Payment Frame</h1>
+  <p>This frame requires payment to play.</p>
+</body>
+</html>`
 
-    const html = createPaymentFrame(START_IMAGE_URL, PUBLIC_URL)
     console.log("[v0] Generated HTML length:", html.length)
-    console.log("[v0] HTML preview:", html.substring(0, 200))
 
-    res.setHeader("Content-Type", "text/html")
+    res.setHeader("Content-Type", "text/html; charset=utf-8")
+    res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate")
     res.status(200).send(html)
+
     console.log("[v0] Response sent successfully")
   } catch (e) {
-    console.error("[v0] Error in /api/index:", e)
-    res.status(500).send(`Server Error: ${e.message}`)
+    console.error("[v0] Error:", e.message)
+    res.status(500).send(`Error: ${e.message}`)
   }
 }
