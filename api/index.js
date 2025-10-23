@@ -12,7 +12,7 @@ module.exports = async function handler(req, res) {
       version: "1",
       imageUrl: START_IMAGE_URL,
       button: {
-        title: "Pay 0.25 USDC to Play",
+        title: "Play If U Dare",
         action: {
           type: "launch_frame",
           name: "Payment Frame",
