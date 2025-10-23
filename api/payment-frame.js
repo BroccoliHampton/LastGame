@@ -1,5 +1,5 @@
 //
-// This is the full content for api/payment-frame.js (v3 - Robust Read Calls)
+// This is the full content for api/payment-frame.js (v3)
 //
 module.exports = async function handler(req, res) {
   console.log("[v3] /api/payment-frame called - Method:", req.method)
@@ -9,19 +9,21 @@ module.exports = async function handler(req, res) {
     const PUBLIC_URL = process.env.PUBLIC_URL || "https://last-game-kappa.vercel.app"
     const GAME_URL = process.env.GAME_URL
     
-    // --- NEW: Pass the public RPC URL to the client ---
+    // Pass the public RPC URL to the client
     const BASE_PROVIDER_URL = process.env.NEXT_PUBLIC_BASE_PROVIDER_URL
-    // ---
 
     // Validation
     if (!GAME_URL || !PUBLIC_URL || !BASE_PROVIDER_URL) {
       console.error("[v3] ERROR: Missing env vars. Need GAME_URL, PUBLIC_URL, and NEXT_PUBLIC_BASE_PROVIDER_URL")
+      console.error(`[v3] GAME_URL: ${GAME_URL ? 'Set' : 'Missing'}`)
+      console.error(`[v3] PUBLIC_URL: ${PUBLIC_URL ? 'Set' : 'Missing'}`)
+      console.error(`[v3] BASE_PROVIDER_URL: ${BASE_PROVIDER_URL ? 'Set' : 'Missing'}`)
       return res.status(500).send("Server configuration error: Missing required environment variables.")
     }
 
     console.log("[v3] Payment frame loaded")
 
-    const html = `<!DOCTYPE html>
+    const html = \`<!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8">
@@ -43,15 +45,15 @@ module.exports = async function handler(req, res) {
   </style>
   
   <meta property="fc:frame" content="vNext" />
-  <meta property="fc:frame:image" content="${START_IMAGE_URL}" />
+  <meta property="fc:frame:image" content="\${START_IMAGE_URL}" />
   <meta property="fc:frame:image:aspect_ratio" content="1:1" />
   <meta property="fc:frame:button:1" content="Pay to Play" />
   <meta property="fc:frame:button:1:action" content="tx" />
-  <meta property="fc:frame:button:1:target" content="${PUBLIC_URL}/api/transaction" />
-  <meta property="fc:frame:post_url" content="${PUBLIC_URL}/api/verify" />
+  <meta property="fc:frame:button:1:target" content="\${PUBLIC_URL}/api/transaction" />
+  <meta property="fc:frame:post_url" content="\${PUBLIC_URL}/api/verify" />
   
   <meta property="og:title" content="Payment Frame" />
-  <meta property="og:image" content="${START_IMAGE_URL}" />
+  <meta property="og:image" content="\${START_IMAGE_URL}" />
 </head>
 <body>
   <div class="container">
@@ -70,9 +72,8 @@ module.exports = async function handler(req, res) {
     const USDC_ADDRESS = '0x833589fCD6eDb6E08f4c7C32D4f71b54bda02913' // Base USDC
     const CONTRACT_ADDRESS = '0x9C751E6825EDAa55007160b99933846f6ECeEc9B' // Your contract
     const CHAIN_ID = '0x2105' // Base chain ID (8453)
-    const GAME_URL = '${GAME_URL}'
-    // --- NEW: Get the public RPC URL from the server ---
-    const BASE_PROVIDER_URL = '${BASE_PROVIDER_URL}' 
+    const GAME_URL = '\${GAME_URL}'
+    const BASE_PROVIDER_URL = '\${BASE_PROVIDER_URL}' 
     // ---
 
     const usdcAbi = [
@@ -90,7 +91,6 @@ module.exports = async function handler(req, res) {
     const payButton = document.getElementById('payButton')
     const statusDiv = document.getElementById('status')
 
-    // --- NEW: Create a read-only provider ---
     let readOnlyProvider;
     let readOnlyGameContract;
     try {
@@ -101,7 +101,6 @@ module.exports = async function handler(req, res) {
       statusDiv.textContent = 'Error: Failed to connect to Base network.'
       statusDiv.className = 'status error'
     }
-    // ---
 
     payButton.addEventListener('click', async () => {
       console.log('[v3] Button clicked!')
@@ -114,7 +113,6 @@ module.exports = async function handler(req, res) {
 
       try {
         // --- 1. Get Game Data (Price and Epoch) via read-only provider ---
-        // This runs *before* connecting to the user's wallet
         statusDiv.textContent = 'Fetching current price...'
         console.log('[v3] Fetching price and slot0 using read-only provider...')
         
@@ -228,7 +226,7 @@ module.exports = async function handler(req, res) {
         if (error.data?.message) {
           errorMessage = error.data.message
         } else if (error.reason) {
-          errorMessage = error.reason
+          errorMessage = error.row
         }
         
         // Handle common contract errors
@@ -252,17 +250,18 @@ module.exports = async function handler(req, res) {
     statusDiv.textContent = 'Ready to play'
   </script>
 </body>
-</html>`
+</html>\`
 
     console.log("[v3] Payment frame HTML generated")
 
-    res.setHeader("Content-Type", "text/html; charset-utf-8")
+    res.setHeader("Content-Type", "text/html; charset=utf-8")
     res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate")
     res.status(200).send(html)
 
     console.log("[v3] Payment frame response sent")
   } catch (e) {
-    console.error("[v3] Error in payment frame:", e.message)
-    res.status(500).send(`Server Error: ${e.message}`)
+    console.error("[v3] FATAL ERROR in payment frame:", e.message)
+    console.error(e) // Log the full error stack
+    res.status(500).send(\`Server Error: \${e.message}\`)
   }
 }
