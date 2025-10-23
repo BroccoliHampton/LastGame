@@ -1,8 +1,8 @@
 //
-// This is the full content for api/payment-frame.js (v10 - Fix Checksum Error)
+// This is the full content for api/payment-frame.js (v11 - Fix ALL Checksums)
 //
 module.exports = async function handler(req, res) {
-  console.log("[v10] /api/payment-frame called - Method:", req.method)
+  console.log("[v11] /api/payment-frame called - Method:", req.method)
 
   try {
     const START_IMAGE_URL = process.env.START_IMAGE_URL || "https://i.imgur.com/IsUWL7j.png"
@@ -11,17 +11,17 @@ module.exports = async function handler(req, res) {
 
     // Validation
     if (!GAME_URL || !PUBLIC_URL) {
-      console.error("[v10] ERROR: Missing GAME_URL or PUBLIC_URL env vars")
+      console.error("[v11] ERROR: Missing GAME_URL or PUBLIC_URL env vars")
       return res.status(500).send("Server configuration error: Missing required environment variables.")
     }
 
-    console.log("[v10] Payment frame loaded")
+    console.log("[v11] Payment frame loaded")
 
     const html = `<!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale-1">
   <title>Payment Frame</title>
   <style>
     body { margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; display: flex; align-items: center; justify-content: center; min-height: 100vh; }
@@ -58,13 +58,23 @@ module.exports = async function handler(req, res) {
   </div>
 
   <script type="module">
-    console.log('[v10] Payment frame script starting')
+    console.log('[v11] Payment frame script starting')
     
     const { ethers } = await import('https://esm.sh/ethers@5.7.2')
     
     // --- START CONFIGURATION ---
-    const USDC_ADDRESS = '0x833589fCD6eDb6E08f4c7C32D4f71b54bda02913' // Base USDC
-    const CONTRACT_ADDRESS = '0x9C751E6825EDAa55007160b99933846f6ECeEc9B' // Your contract
+    // --- NEW CHECKSUM FIX for constants ---
+    // Define raw strings first
+    const RAW_USDC_ADDRESS = '0x833589fCD6eDb6E08f4c7C32D4f71b54bda02913'
+    const RAW_CONTRACT_ADDRESS = '0x9C751E6825EDAa55007160b99933846f6ECeEc9B'
+    
+    // Checksum them with ethers
+    const USDC_ADDRESS = ethers.utils.getAddress(RAW_USDC_ADDRESS)
+    const CONTRACT_ADDRESS = ethers.utils.getAddress(RAW_CONTRACT_ADDRESS)
+    console.log('[v11] Checksummed USDC Address:', USDC_ADDRESS)
+    console.log('[v11] Checksummed Contract Address:', CONTRACT_ADDRESS)
+    // --- END FIX ---
+    
     const CHAIN_ID = '0x2105' // Base chain ID (8453)
     const GAME_URL = '\${GAME_URL}'
     // ---
@@ -83,7 +93,7 @@ module.exports = async function handler(req, res) {
     const statusDiv = document.getElementById('status')
 
     payButton.addEventListener('click', async () => {
-      console.log('[v10] Button clicked!')
+      console.log('[v11] Button clicked!')
       statusDiv.textContent = 'Initializing...'
       statusDiv.className = 'status loading'
       payButton.disabled = true
@@ -95,7 +105,7 @@ module.exports = async function handler(req, res) {
       try {
         // --- 1. Get Game Data (Price and Epoch) via OUR server ---
         statusDiv.textContent = 'Fetching current price...'
-        console.log('[v10] Fetching price from /api/get-price...')
+        console.log('[v11] Fetching price from /api/get-price...')
         
         const response = await fetch('/api/get-price');
         const data = await response.json();
@@ -108,11 +118,11 @@ module.exports = async function handler(req, res) {
         epochId = data.epochId;
         priceInUsdc = data.priceInUsdc;
         
-        console.log(\`[v10] Current price: \${price.toString()} (\${priceInUsdc} USDC)\`)
-        console.log(\`[v10] Current epochId: \${epochId}\`)
+        console.log(\`[v11] Current price: \${price.toString()} (\${priceInUsdc} USDC)\`)
+        console.log(\`[v11] Current epochId: \${epochId}\`)
 
         if (price.isZero()) {
-          console.log('[v10] Price is zero. Switching to free claim.')
+          console.log('[v11] Price is zero. Switching to free claim.')
           payButton.textContent = 'Claim for Free'
           statusDiv.textContent = 'Price is 0. Claim for free to play!'
         } else {
@@ -120,31 +130,29 @@ module.exports = async function handler(req, res) {
         }
 
         // --- Now, connect to the user's wallet ---
-        console.log('[v10] Importing Farcaster SDK')
+        console.log('[v11] Importing Farcaster SDK')
         const { default: sdk } = await import('https://esm.sh/@farcaster/miniapp-sdk')
         
-        console.log('[v10] SDK imported, calling ready()')
+        console.log('[v11] SDK imported, calling ready()')
         await sdk.actions.ready()
         
-        console.log('[v10] Getting Ethereum provider from wallet')
+        console.log('[v11] Getting Ethereum provider from wallet')
         const provider = await sdk.wallet.getEthereumProvider()
         
         if (!provider) {
           throw new Error('Wallet provider not available')
         }
         
-        console.log('[v10] Provider obtained, requesting accounts')
+        console.log('[v11] Provider obtained, requesting accounts')
         statusDiv.textContent = 'Connecting wallet...'
         
         const accounts = await provider.request({ method: 'eth_requestAccounts' })
         
-        // --- NEW CHECKSUM FIX ---
-        // Get the raw address from the wallet
+        // --- CHECKSUM FIX for user address ---
         const rawUserAddress = accounts[0]
-        console.log('[v10] User address (raw):', rawUserAddress)
-        // Fix the checksum before using it
+        console.log('[v11] User address (raw):', rawUserAddress)
         const userAddress = ethers.utils.getAddress(rawUserAddress)
-        console.log('[v10] User address (checksummed):', userAddress)
+        console.log('[v11] User address (checksummed):', userAddress)
         // --- END FIX ---
 
         // Ensure user is on the correct chain
@@ -164,34 +172,34 @@ module.exports = async function handler(req, res) {
         const ethersProvider = new ethers.providers.Web3Provider(provider)
         const signer = ethersProvider.getSigner()
         
+        // We use the new checksummed USDC_ADDRESS and CONTRACT_ADDRESS here
         const usdcContract = new ethers.Contract(USDC_ADDRESS, usdcAbi, signer)
         const gameContract = new ethers.Contract(CONTRACT_ADDRESS, contractAbi, signer)
         
         // --- 2. Check Allowance and Request Approval (SKIP IF PRICE IS ZERO) ---
         if (price.gt(0)) { // Only run if price is greater than 0
           statusDiv.textContent = 'Checking USDC approval...'
-          console.log('[v10] Price > 0. Checking allowance...')
+          console.log('[v11] Price > 0. Checking allowance...')
           
-          // Use the checksummed userAddress
           const currentAllowance = await usdcContract.allowance(userAddress, CONTRACT_ADDRESS)
-          console.log(\`[v10] Current allowance: \${currentAllowance.toString()}\`)
+          console.log(\`[v11] Current allowance: \${currentAllowance.toString()}\`)
           
           if (currentAllowance.lt(price)) {
-            console.log('[v10] Allowance is too low, requesting approval...')
+            console.log('[v11] Allowance is too low, requesting approval...')
             statusDiv.textContent = \`Please approve \${priceInUsdc} USDC...\`
             
             const approveTx = await usdcContract.approve(CONTRACT_ADDRESS, price)
-            console.log('[v10] Approval transaction sent:', approveTx.hash)
+            console.log('[v11] Approval transaction sent:', approveTx.hash)
             
             statusDiv.textContent = 'Waiting for approval confirmation...'
             await approveTx.wait() // Wait for 1 confirmation
             
-            console.log('[v10] Approval confirmed!')
+            console.log('[v11] Approval confirmed!')
           } else {
-            console.log('[v10] Approval already sufficient.')
+            console.log('[v11] Approval already sufficient.')
           }
         } else {
-          console.log('[v10] Price is 0. Skipping approval.')
+          console.log('[v11] Price is 0. Skipping approval.')
         }
 
         // --- 3. Call the 'takeover' function ---
@@ -200,7 +208,7 @@ module.exports = async function handler(req, res) {
         } else {
           statusDiv.textContent = 'Finalizing payment...'
         }
-        console.log('[v10] Preparing takeover transaction...')
+        console.log('[v11] Preparing takeover transaction...')
 
         const deadline = Math.floor(Date.now() / 1000) + 300 // 5-minute deadline
         const uri = "" 
@@ -214,12 +222,12 @@ module.exports = async function handler(req, res) {
           price // Use the fetched price (0 or >0) as maxPaymentAmount
         )
         
-        console.log('[v10] Takeover transaction sent:', takeoverTx.hash)
+        console.log('[v11] Takeover transaction sent:', takeoverTx.hash)
         statusDiv.textContent = 'Waiting for confirmation...'
         
         await takeoverTx.wait() 
         
-        console.log('[v10] Transaction confirmed!')
+        console.log('[v11] Transaction confirmed!')
         statusDiv.textContent = 'Success! Redirecting...'
         statusDiv.className = 'status success'
         
@@ -228,7 +236,7 @@ module.exports = async function handler(req, res) {
         }, 2000)
         
       } catch (error) {
-        console.error('[v10] Payment error:', error)
+        console.error('[v11] Payment error:', error)
         let errorMessage = error.message || 'Payment failed'
         if (error.data?.message) {
           errorMessage = error.data.message
@@ -255,21 +263,21 @@ module.exports = async function handler(req, res) {
       }
     })
     
-    console.log('[v10] Click handler attached')
+    console.log('[v11] Click handler attached')
     statusDiv.textContent = 'Ready to play'
   </script>
 </body>
 </html>`
 
-    console.log("[v10] Payment frame HTML generated")
+    console.log("[v11] Payment frame HTML generated")
 
     res.setHeader("Content-Type", "text/html; charset=utf-8")
     res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate")
     res.status(200).send(html)
 
-    console.log("[v10] Payment frame response sent")
+    console.log("[v11] Payment frame response sent")
   } catch (e) {
-    console.error("[v10] FATAL ERROR in payment frame:", e.message)
+    console.error("[v11] FATAL ERROR in payment frame:", e.message)
     console.error(e) // Log the full error stack
     res.status(500).send(`Server Error: ${e.message}`)
   }
