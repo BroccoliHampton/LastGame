@@ -1,8 +1,8 @@
 //
-// This is the full content for api/payment-frame.js (v15 - Server-Side Wait)
+// This is the full content for api/payment-frame.js (v16 - Fix Redirect URL)
 //
 module.exports = async function handler(req, res) {
-  console.log("[v15] /api/payment-frame called - Method:", req.method)
+  console.log("[v16] /api/payment-frame called - Method:", req.method)
 
   try {
     const START_IMAGE_URL = process.env.START_IMAGE_URL || "https://i.imgur.com/IsUWL7j.png"
@@ -11,11 +11,11 @@ module.exports = async function handler(req, res) {
 
     // Validation
     if (!GAME_URL || !PUBLIC_URL) {
-      console.error("[v15] ERROR: Missing GAME_URL or PUBLIC_URL env vars")
+      console.error("[v16] ERROR: Missing GAME_URL or PUBLIC_URL env vars")
       return res.status(500).send("Server configuration error: Missing required environment variables.")
     }
 
-    console.log("[v15] Payment frame loaded")
+    console.log("[v16] Payment frame loaded")
 
     const html = `<!DOCTYPE html>
 <html>
@@ -58,7 +58,7 @@ module.exports = async function handler(req, res) {
   </div>
 
   <script type="module">
-    console.log('[v15] Payment frame script starting')
+    console.log('[v16] Payment frame script starting')
     
     const { ethers } = await import('https://esm.sh/ethers@5.7.2')
     
@@ -66,7 +66,9 @@ module.exports = async function handler(req, res) {
     const USDC_ADDRESS = '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913'
     const CONTRACT_ADDRESS = '0x9c751e6825edaa55007160b99933846f6eceec9b'
     const CHAIN_ID = '0x2105' // Base chain ID (8453)
-    const GAME_URL = '\${GAME_URL}'
+    
+    // --- BUG FIX: Removed the \ so the server injects the URL ---
+    const GAME_URL = '${GAME_URL}' 
     
     const APPROVE_GAS_LIMIT = 200000
     const TAKEOVER_GAS_LIMIT = 500000
@@ -85,7 +87,7 @@ module.exports = async function handler(req, res) {
     const statusDiv = document.getElementById('status')
 
     payButton.addEventListener('click', async () => {
-      console.log('[v15] Button clicked!')
+      console.log('[v16] Button clicked!')
       statusDiv.textContent = 'Initializing...'
       statusDiv.className = 'status loading'
       payButton.disabled = true
@@ -97,27 +99,27 @@ module.exports = async function handler(req, res) {
 
       try {
         // --- 1. Connect to wallet FIRST ---
-        console.log('[v15] Importing Farcaster SDK')
+        console.log('[v16] Importing Farcaster SDK')
         const { default: sdk } = await import('https://esm.sh/@farcaster/miniapp-sdk')
         
-        console.log('[v15] SDK imported, calling ready()')
+        console.log('[v16] SDK imported, calling ready()')
         await sdk.actions.ready()
         
-        console.log('[v15] Getting Ethereum provider from wallet')
+        console.log('[v16] Getting Ethereum provider from wallet')
         const provider = await sdk.wallet.getEthereumProvider()
         
         if (!provider) {
           throw new Error('Wallet provider not available')
         }
         
-        console.log('[v15] Provider obtained, requesting accounts')
+        console.log('[v16] Provider obtained, requesting accounts')
         statusDiv.textContent = 'Connecting wallet...'
         
         const accounts = await provider.request({ method: 'eth_requestAccounts' })
         
         const rawUserAddress = accounts[0]
         const userAddress = ethers.utils.getAddress(rawUserAddress)
-        console.log(\`[v15] User address: \${userAddress}\`)
+        console.log(\`[v16] User address: \${userAddress}\`)
 
         // Ensure user is on the correct chain
         try {
@@ -134,7 +136,7 @@ module.exports = async function handler(req, res) {
         
         // --- 2. Get Game Data (Price, Epoch, Allowance) via OUR server ---
         statusDiv.textContent = 'Fetching game data...'
-        console.log(\`[v15] Fetching data from /api/get-price?userAddress=\${userAddress}\`)
+        console.log(\`[v16] Fetching data from /api/get-price?userAddress=\${userAddress}\`)
         
         const response = await fetch(\`/api/get-price?userAddress=\${userAddress}\`);
         const data = await response.json();
@@ -148,10 +150,10 @@ module.exports = async function handler(req, res) {
         priceInUsdc = data.priceInUsdc;
         currentAllowance = ethers.BigNumber.from(data.allowance);
         
-        console.log(\`[v15] Price: \${price.toString()}, Epoch: \${epochId}, Allowance: \${currentAllowance.toString()}\`)
+        console.log(\`[v16] Price: \${price.toString()}, Epoch: \${epochId}, Allowance: \${currentAllowance.toString()}\`)
 
         if (price.isZero()) {
-          console.log('[v15] Price is zero. Switching to free claim.')
+          console.log('[v16] Price is zero. Switching to free claim.')
           payButton.textContent = 'Claim for Free'
           statusDiv.textContent = 'Price is 0. Claim for free to play!'
         } else {
@@ -168,18 +170,17 @@ module.exports = async function handler(req, res) {
         // --- 4. Check Allowance and Request Approval (SKIP IF PRICE IS ZERO) ---
         if (price.gt(0)) { 
           statusDiv.textContent = 'Checking USDC approval...'
-          console.log('[v15] Price > 0. Checking allowance...')
+          console.log('[v16] Price > 0. Checking allowance...')
           
           if (currentAllowance.lt(price)) {
-            console.log('[v15] Allowance is too low, requesting approval...')
+            console.log('[v16] Allowance is too low, requesting approval...')
             statusDiv.textContent = \`Please approve \${priceInUsdc} USDC...\`
             
             const approveTx = await usdcContract.approve(CONTRACT_ADDRESS, price, { 
               gasLimit: APPROVE_GAS_LIMIT 
             })
-            console.log('[v15] Approval transaction sent:', approveTx.hash)
+            console.log('[v16] Approval transaction sent:', approveTx.hash)
             
-            // --- NEW: Server-side wait ---
             statusDiv.textContent = 'Waiting for approval (1/2)...'
             const approvePoll = await fetch(\`/api/check-tx?txHash=\${approveTx.hash}\`);
             const approveData = await approvePoll.json();
@@ -187,14 +188,13 @@ module.exports = async function handler(req, res) {
             if (!approvePoll.ok || approveData.status !== 'confirmed') {
               throw new Error(approveData.error || 'Approval transaction failed.');
             }
-            console.log('[v15] Approval confirmed by server!')
-            // --- END NEW ---
+            console.log('[v16] Approval confirmed by server!')
             
           } else {
-            console.log('[v15] Approval already sufficient.')
+            console.log('[v16] Approval already sufficient.')
           }
         } else {
-          console.log('[v15] Price is 0. Skipping approval.')
+          console.log('[v16] Price is 0. Skipping approval.')
         }
 
         // --- 5. Call the 'takeover' function ---
@@ -203,7 +203,7 @@ module.exports = async function handler(req, res) {
         } else {
           statusDiv.textContent = 'Finalizing payment (2/2)...'
         }
-        console.log('[v15] Preparing takeover transaction...')
+        console.log('[v16] Preparing takeover transaction...')
 
         const deadline = Math.floor(Date.now() / 1000) + 300 // 5-minute deadline
         const uri = "" 
@@ -218,9 +218,8 @@ module.exports = async function handler(req, res) {
           { gasLimit: TAKEOVER_GAS_LIMIT }
         )
         
-        console.log('[v15] Takeover transaction sent:', takeoverTx.hash)
+        console.log('[v16] Takeover transaction sent:', takeoverTx.hash)
         
-        // --- NEW: Server-side wait ---
         statusDiv.textContent = 'Waiting for final confirmation (2/2)...'
         const takeoverPoll = await fetch(\`/api/check-tx?txHash=\${takeoverTx.hash}\`);
         const takeoverData = await takeoverPoll.json();
@@ -228,18 +227,18 @@ module.exports = async function handler(req, res) {
         if (!takeoverPoll.ok || takeoverData.status !== 'confirmed') {
           throw new Error(takeoverData.error || 'Payment transaction failed.');
         }
-        console.log('[v15] Payment confirmed by server!')
-        // --- END NEW ---
+        console.log('[v16] Payment confirmed by server!')
         
         statusDiv.textContent = 'Success! Redirecting...'
         statusDiv.className = 'status success'
         
         setTimeout(() => {
-          window.location.href = GAME_URL
+          // This will now use the correctly injected URL
+          window.location.href = GAME_URL 
         }, 2000)
         
       } catch (error) {
-        console.error('[v15] Payment error:', error)
+        console.error('[v16] Payment error:', error)
         let errorMessage = error.message || 'Payment failed'
         if (error.data?.message) {
           errorMessage = error.data.message
@@ -269,21 +268,21 @@ module.exports = async function handler(req, res) {
       }
     })
     
-    console.log('[v15] Click handler attached')
+    console.log('[v16] Click handler attached')
     statusDiv.textContent = 'Ready to play'
   </script>
 </body>
 </html>`
 
-    console.log("[v15] Payment frame HTML generated")
+    console.log("[v16] Payment frame HTML generated")
 
     res.setHeader("Content-Type", "text/html; charset=utf-8")
     res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate")
     res.status(200).send(html)
 
-    console.log("[v15] Payment frame response sent")
+    console.log("[v16] Payment frame response sent")
   } catch (e) {
-    console.error("[v15] FATAL ERROR in payment frame:", e.message)
+    console.error("[v16] FATAL ERROR in payment frame:", e.message)
     console.error(e) // Log the full error stack
     res.status(500).send(`Server Error: ${e.message}`)
   }
