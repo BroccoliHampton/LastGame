@@ -1,8 +1,8 @@
 //
-// This is the full content for api/payment-frame.js (v17 - Pre-load Price)
+// This is the full content for api/payment-frame.js (v17 - New Style)
 //
 module.exports = async function handler(req, res) {
-  console.log("[v17] /api/payment-frame called - Method:", req.method)
+  console.log("[v17-style] /api/payment-frame called - Method:", req.method)
 
   try {
     const START_IMAGE_URL = process.env.START_IMAGE_URL || "https://i.imgur.com/IsUWL7j.png"
@@ -11,11 +11,11 @@ module.exports = async function handler(req, res) {
 
     // Validation
     if (!GAME_URL || !PUBLIC_URL) {
-      console.error("[v17] ERROR: Missing GAME_URL or PUBLIC_URL env vars")
+      console.error("[v17-style] ERROR: Missing GAME_URL or PUBLIC_URL env vars")
       return res.status(500).send("Server configuration error: Missing required environment variables.")
     }
 
-    console.log("[v17] Payment frame loaded")
+    console.log("[v17-style] Payment frame loaded")
 
     const html = `<!DOCTYPE html>
 <html>
@@ -23,21 +23,99 @@ module.exports = async function handler(req, res) {
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Payment Frame</title>
+
   <style>
-    body { margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; display: flex; align-items: center; justify-content: center; min-height: 100vh; }
-    .container { text-align: center; padding: 2rem; max-width: 400px; }
-    h1 { font-size: 2rem; margin-bottom: 1rem; }
-    p { font-size: 1.1rem; margin-bottom: 2rem; opacity: 0.9; }
-    button { background: white; color: #667eea; border: none; padding: 1rem 2rem; font-size: 1.1rem; font-weight: 600; border-radius: 12px; cursor: pointer; transition: transform 0.2s, box-shadow 0.2s; box-shadow: 0 4px 12px rgba(0,0,0,0.2); pointer-events: auto; position: relative; z-index: 10; }
-    button:hover { transform: translateY(-2px); box-shadow: 0 6px 16px rgba(0,0,0,0.3); }
-    button:active { transform: translateY(0); }
-    button:disabled { opacity: 0.6; cursor: not-allowed; }
-    .status { margin-top: 1rem; font-size: 0.9rem; min-height: 20px; }
-    .error { color: #ffcccc; }
-    .success { color: #ccffcc; }
-    .loading { color: #ffffcc; }
+    /* Import pixel font */
+    @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+
+    body {
+      margin: 0;
+      padding: 0;
+      /* Classic 8-bit dark purple background */
+      background: #2a2a3a;
+      /* Pixel font for everything */
+      font-family: 'Press Start 2P', cursive;
+      color: #f0f0f0; /* Off-white text */
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      /* For sharp pixel rendering */
+      image-rendering: pixelated;
+    }
+    .container {
+      text-align: center;
+      padding: 2rem;
+      max-width: 400px;
+    }
+    h1 {
+      font-size: 1.5rem; /* Pixel fonts are big, scale it down */
+      margin-bottom: 1.5rem;
+      color: #ffffff;
+    }
+    p {
+      font-size: 0.8rem; /* Scaled down for pixel font */
+      margin-bottom: 2rem;
+      line-height: 1.5; /* Add spacing for readability */
+      opacity: 0.9;
+    }
+    button {
+      /* Use the pixel font */
+      font-family: 'Press Start 2P', cursive;
+      font-size: 0.9rem;
+      font-weight: 600;
+      
+      /* 8-bit button style */
+      background: #f0f0f0; /* Light background */
+      color: #2a2a3a;     /* Dark text */
+      border: 2px solid #ffffff; /* White border */
+      padding: 1rem 1.5rem;
+      border-radius: 0; /* Sharp corners */
+      cursor: pointer;
+      
+      /* 8-bit shadow */
+      box-shadow: 4px 4px 0px #1a1a2a; /* Darker bg color for shadow */
+      
+      transition: transform 0.1s, box-shadow 0.1s;
+      
+      pointer-events: auto;
+      position: relative;
+      z-index: 10;
+    }
+    button:hover {
+      /* "Press" effect */
+      transform: translate(2px, 2px);
+      box-shadow: 2px 2px 0px #1a1a2a;
+    }
+    button:active {
+      /* Full press effect */
+      transform: translate(4px, 4px);
+      box-shadow: 0px 0px 0px #1a1a2a;
+    }
+    button:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      background: #777777;
+      color: #bbbbbb;
+      box-shadow: 4px 4px 0px #1a1a2a;
+      transform: none;
+    }
+    .status {
+      margin-top: 1.5rem;
+      font-size: 0.7rem;
+      min-height: 20px;
+      line-height: 1.4;
+    }
+    .error {
+      color: #ff6b6b; /* Bright 8-bit red */
+    }
+    .success {
+      color: #73ff73; /* Bright 8-bit green */
+    }
+    .loading {
+      color: #ffff73; /* Bright 8-bit yellow */
+    }
   </style>
-  
   <meta property="fc:frame" content="vNext" />
   <meta property="fc:frame:image" content="${START_IMAGE_URL}" />
   <meta property="fc:frame:image:aspect_ratio" content="1:1" />
@@ -58,7 +136,7 @@ module.exports = async function handler(req, res) {
   </div>
 
   <script type="module">
-    console.log('[v17] Payment frame script starting')
+    console.log('[v17-style] Payment frame script starting')
     
     const { ethers } = await import('https://esm.sh/ethers@5.7.2')
     
@@ -84,9 +162,9 @@ module.exports = async function handler(req, res) {
     const payButton = document.getElementById('payButton')
     const statusDiv = document.getElementById('status')
 
-    // --- NEW: Function to pre-load price ---
+    // --- Function to pre-load price ---
     async function loadPrice() {
-      console.log('[v17] Pre-loading price...')
+      console.log('[v17-style] Pre-loading price...')
       statusDiv.textContent = 'Fetching price...'
       statusDiv.className = 'status loading'
       payButton.disabled = true;
@@ -119,10 +197,10 @@ module.exports = async function handler(req, res) {
         payButton.textContent = 'Error'
       }
     }
-    // --- END NEW ---
+    // --- END ---
 
     payButton.addEventListener('click', async () => {
-      console.log('[v17] Button clicked!')
+      console.log('[v17-style] Button clicked!')
       statusDiv.textContent = 'Initializing...'
       statusDiv.className = 'status loading'
       payButton.disabled = true
@@ -134,27 +212,27 @@ module.exports = async function handler(req, res) {
 
       try {
         // --- 1. Connect to wallet FIRST ---
-        console.log('[v17] Importing Farcaster SDK')
+        console.log('[v17-style] Importing Farcaster SDK')
         const { default: sdk } = await import('https://esm.sh/@farcaster/miniapp-sdk')
         
-        console.log('[v17] SDK imported, calling ready()')
+        console.log('[v17-style] SDK imported, calling ready()')
         await sdk.actions.ready()
         
-        console.log('[v17] Getting Ethereum provider from wallet')
+        console.log('[v17-style] Getting Ethereum provider from wallet')
         const provider = await sdk.wallet.getEthereumProvider()
         
         if (!provider) {
           throw new Error('Wallet provider not available')
         }
         
-        console.log('[v17] Provider obtained, requesting accounts')
+        console.log('[v17-style] Provider obtained, requesting accounts')
         statusDiv.textContent = 'Connecting wallet...'
         
         const accounts = await provider.request({ method: 'eth_requestAccounts' })
         
         const rawUserAddress = accounts[0]
         const userAddress = ethers.utils.getAddress(rawUserAddress)
-        console.log(\`[v17] User address: \${userAddress}\`)
+        console.log(\`[v17-style] User address: \${userAddress}\`)
 
         // Ensure user is on the correct chain
         try {
@@ -170,10 +248,8 @@ module.exports = async function handler(req, res) {
         }
         
         // --- 2. Get Game Data (Price, Epoch, Allowance) via OUR server ---
-        // This *re-fetches* the data with the user's address to get allowance
-        // and ensure the price hasn't changed.
         statusDiv.textContent = 'Fetching game data...'
-        console.log(\`[v17] Fetching data from /api/get-price?userAddress=\${userAddress}\`)
+        console.log(\`[v17-style] Fetching data from /api/get-price?userAddress=\${userAddress}\`)
         
         const response = await fetch(\`/api/get-price?userAddress=\${userAddress}\`);
         const data = await response.json();
@@ -187,7 +263,7 @@ module.exports = async function handler(req, res) {
         priceInUsdc = data.priceInUsdc;
         currentAllowance = ethers.BigNumber.from(data.allowance);
         
-        console.log(\`[v17] Price: \${price.toString()}, Epoch: \${epochId}, Allowance: \${currentAllowance.toString()}\`)
+        console.log(\`[v17-style] Price: \${price.toString()}, Epoch: \${epochId}, Allowance: \${currentAllowance.toString()}\`)
 
         // Update button text *again* in case price changed
         if (price.isZero()) {
@@ -206,16 +282,16 @@ module.exports = async function handler(req, res) {
         // --- 4. Check Allowance and Request Approval (SKIP IF PRICE IS ZERO) ---
         if (price.gt(0)) { 
           statusDiv.textContent = 'Checking USDC approval...'
-          console.log('[v17] Price > 0. Checking allowance...')
+          console.log('[v17-style] Price > 0. Checking allowance...')
           
           if (currentAllowance.lt(price)) {
-            console.log('[v17] Allowance is too low, requesting approval...')
+            console.log('[v17-style] Allowance is too low, requesting approval...')
             statusDiv.textContent = \`Please approve \${priceInUsdc} USDC...\`
             
             const approveTx = await usdcContract.approve(CONTRACT_ADDRESS, price, { 
               gasLimit: APPROVE_GAS_LIMIT 
             })
-            console.log('[v17] Approval transaction sent:', approveTx.hash)
+            console.log('[v17-style] Approval transaction sent:', approveTx.hash)
             
             statusDiv.textContent = 'Waiting for approval (1/2)...'
             const approvePoll = await fetch(\`/api/check-tx?txHash=\${approveTx.hash}\`);
@@ -224,13 +300,13 @@ module.exports = async function handler(req, res) {
             if (!approvePoll.ok || approveData.status !== 'confirmed') {
               throw new Error(approveData.error || 'Approval transaction failed.');
             }
-            console.log('[v17] Approval confirmed by server!')
+            console.log('[v17-style] Approval confirmed by server!')
             
           } else {
-            console.log('[v17] Approval already sufficient.')
+            console.log('[v17-style] Approval already sufficient.')
           }
         } else {
-          console.log('[v17] Price is 0. Skipping approval.')
+          console.log('[v17-style] Price is 0. Skipping approval.')
         }
 
         // --- 5. Call the 'takeover' function ---
@@ -239,7 +315,7 @@ module.exports = async function handler(req, res) {
         } else {
           statusDiv.textContent = 'Finalizing payment (2/2)...'
         }
-        console.log('[v17] Preparing takeover transaction...')
+        console.log('[v17-style] Preparing takeover transaction...')
 
         const deadline = Math.floor(Date.now() / 1000) + 300 // 5-minute deadline
         const uri = "" 
@@ -254,7 +330,7 @@ module.exports = async function handler(req, res) {
           { gasLimit: TAKEOVER_GAS_LIMIT }
         )
         
-        console.log('[v17] Takeover transaction sent:', takeoverTx.hash)
+        console.log('[v17-style] Takeover transaction sent:', takeoverTx.hash)
         
         statusDiv.textContent = 'Waiting for final confirmation (2/2)...'
         const takeoverPoll = await fetch(\`/api/check-tx?txHash=\${takeoverTx.hash}\`);
@@ -263,7 +339,7 @@ module.exports = async function handler(req, res) {
         if (!takeoverPoll.ok || takeoverData.status !== 'confirmed') {
           throw new Error(takeoverData.error || 'Payment transaction failed.');
         }
-        console.log('[v17] Payment confirmed by server!')
+        console.log('[v17-style] Payment confirmed by server!')
         
         statusDiv.textContent = 'Success! Redirecting...'
         statusDiv.className = 'status success'
@@ -273,7 +349,7 @@ module.exports = async function handler(req, res) {
         }, 2000)
         
       } catch (error) {
-        console.error('[v17] Payment error:', error)
+        console.error('[v17-style] Payment error:', error)
         let errorMessage = error.message || 'Payment failed'
         if (error.data?.message) {
           errorMessage = error.data.message
@@ -303,22 +379,22 @@ module.exports = async function handler(req, res) {
       }
     })
     
-    // --- NEW: Call the function to load the price on page load ---
+    // --- Call the function to load the price on page load ---
     loadPrice();
 
   </script>
 </body>
 </html>`
 
-    console.log("[v17] Payment frame HTML generated")
+    console.log("[v17-style] Payment frame HTML generated")
 
     res.setHeader("Content-Type", "text/html; charset=utf-8")
     res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate")
     res.status(200).send(html)
 
-    console.log("[v17] Payment frame response sent")
+    console.log("[v17-style] Payment frame response sent")
   } catch (e) {
-    console.error("[v17] FATAL ERROR in payment frame:", e.message)
+    console.error("[v17-style] FATAL ERROR in payment frame:", e.message)
     console.error(e) // Log the full error stack
     res.status(500).send(`Server Error: ${e.message}`)
   }
