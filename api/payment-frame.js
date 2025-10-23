@@ -1,17 +1,24 @@
 //
-// This is the full content for api/payment-frame.js
+// This is the full content for api/payment-frame.js (v2 - More Robust)
 //
 module.exports = async function handler(req, res) {
-  console.log("[v1] /api/payment-frame called - Method:", req.method)
+  console.log("[v2] /api/payment-frame called - Method:", req.method)
 
   try {
     const START_IMAGE_URL = process.env.START_IMAGE_URL || "https://i.imgur.com/IsUWL7j.png"
     const PUBLIC_URL = process.env.PUBLIC_URL || "https://last-game-kappa.vercel.app"
-    const GAME_URL = process.env.GAME_URL
+    const GAME_URL = process.env.GAME_URL // Get env var
 
-    console.log("[v1] Payment frame loaded")
+    // --- NEW VALIDATION ---
+    // Check if required env vars are set
+    if (!GAME_URL || !PUBLIC_URL) {
+      console.error("[v2] ERROR: Missing GAME_URL or PUBLIC_URL env vars")
+      return res.status(500).send("Server configuration error: Missing required environment variables.")
+    }
+    // --- END VALIDATION ---
 
-    // This is the actual payment frame with transaction button
+    console.log("[v2] Payment frame loaded")
+
     const html = `<!DOCTYPE html>
 <html>
 <head>
@@ -106,16 +113,16 @@ module.exports = async function handler(req, res) {
   </div>
 
   <script type="module">
-    console.log('[v1] Payment frame script starting')
+    console.log('[v2] Payment frame script starting')
     
-    // Import ethers from a CDN. This matches your package.json version.
+    // Import ethers from a CDN.
     const { ethers } = await import('https://esm.sh/ethers@5.7.2')
     
     // --- START CONFIGURATION ---
     const USDC_ADDRESS = '0x833589fCD6eDb6E08f4c7C32D4f71b54bda02913' // Base USDC
     const CONTRACT_ADDRESS = '0x9C751E6825EDAa55007160b99933846f6ECeEc9B' // Your contract
     const CHAIN_ID = '0x2105' // Base chain ID (8453)
-    const GAME_URL = '${GAME_URL}'
+    const GAME_URL = '${GAME_URL}' // This is now guaranteed to be set
 
     const usdcAbi = [
       "function approve(address spender, uint256 amount) external returns (bool)",
@@ -133,31 +140,31 @@ module.exports = async function handler(req, res) {
     const statusDiv = document.getElementById('status')
     
     payButton.addEventListener('click', async () => {
-      console.log('[v1] Button clicked!')
+      console.log('[v2] Button clicked!')
       statusDiv.textContent = 'Initializing...'
       statusDiv.className = 'status loading'
       payButton.disabled = true
       
       try {
-        console.log('[v1] Importing Farcaster SDK')
+        console.log('[v2] Importing Farcaster SDK')
         const { default: sdk } = await import('https://esm.sh/@farcaster/miniapp-sdk')
         
-        console.log('[v1] SDK imported, calling ready()')
+        console.log('[v2] SDK imported, calling ready()')
         await sdk.actions.ready()
         
-        console.log('[v1] Getting Ethereum provider')
+        console.log('[v2] Getting Ethereum provider')
         const provider = await sdk.wallet.getEthereumProvider()
         
         if (!provider) {
           throw new Error('Wallet provider not available')
         }
         
-        console.log('[v1] Provider obtained, requesting accounts')
+        console.log('[v2] Provider obtained, requesting accounts')
         statusDiv.textContent = 'Connecting wallet...'
         
         const accounts = await provider.request({ method: 'eth_requestAccounts' })
         const userAddress = accounts[0]
-        console.log('[v1] User address:', userAddress)
+        console.log('[v2] User address:', userAddress)
 
         // Ensure user is on the correct chain
         try {
@@ -166,9 +173,7 @@ module.exports = async function handler(req, res) {
             params: [{ chainId: CHAIN_ID }],
           });
         } catch (switchError) {
-          // This error code indicates that the chain has not been added to MetaMask.
           if (switchError.code === 4902) {
-            // You might want to add logic here to add the chain, but for Base it's usually present.
             throw new Error('Please switch to Base network in your wallet.')
           }
           throw switchError
@@ -183,45 +188,46 @@ module.exports = async function handler(req, res) {
 
         // --- 1. Get Game Data (Price and Epoch) ---
         statusDiv.textContent = 'Fetching current price...'
-        console.log('[v1] Fetching price and slot0...')
+        console.log('[v2] Fetching price and slot0...')
         
         const price = await gameContract.getPrice()
         const slot0 = await gameContract.getSlot0()
         const epochId = slot0.epochId
         
         const priceInUsdc = ethers.utils.formatUnits(price, 6)
-        console.log(`[v1] Current price: ${price.toString()} (${priceInUsdc} USDC)`)
-        console.log(`[v1] Current epochId: ${epochId}`)
+        console.log(\`[v2] Current price: \${price.toString()} (\${priceInUsdc} USDC)\`)
+        console.log(\`[v2] Current epochId: \${epochId}\`)
 
         if (price.isZero()) {
-          throw new Error('Payment epoch has expired. Please try again later.')
+          // You might want to handle this more gracefully
+          throw new Error('Current price is zero. The epoch may have expired.')
         }
         
         // --- 2. Check Allowance and Request Approval ---
         statusDiv.textContent = 'Checking USDC approval...'
-        console.log('[v1] Checking allowance...')
+        console.log('[v2] Checking allowance...')
         
         const currentAllowance = await usdcContract.allowance(userAddress, CONTRACT_ADDRESS)
-        console.log(`[v1] Current allowance: ${currentAllowance.toString()}`)
+        console.log(\`[v2] Current allowance: \${currentAllowance.toString()}\`)
         
         if (currentAllowance.lt(price)) {
-          console.log('[v1] Allowance is too low, requesting approval...')
-          statusDiv.textContent = `Please approve ${priceInUsdc} USDC...`
+          console.log('[v2] Allowance is too low, requesting approval...')
+          statusDiv.textContent = \`Please approve \${priceInUsdc} USDC...\`
           
           const approveTx = await usdcContract.approve(CONTRACT_ADDRESS, price)
-          console.log('[v1] Approval transaction sent:', approveTx.hash)
+          console.log('[v2] Approval transaction sent:', approveTx.hash)
           
           statusDiv.textContent = 'Waiting for approval confirmation...'
           await approveTx.wait() // Wait for 1 confirmation
           
-          console.log('[v1] Approval confirmed!')
+          console.log('[v2] Approval confirmed!')
         } else {
-          console.log('[v1] Approval already sufficient.')
+          console.log('[v2] Approval already sufficient.')
         }
 
         // --- 3. Call the 'takeover' function ---
         statusDiv.textContent = 'Finalizing payment...'
-        console.log('[v1] Preparing takeover transaction...')
+        console.log('[v2] Preparing takeover transaction...')
 
         const deadline = Math.floor(Date.now() / 1000) + 300 // 5-minute deadline
         const uri = "" // Or any string you want the user to set
@@ -235,12 +241,12 @@ module.exports = async function handler(req, res) {
           price // Use the fetched price as maxPaymentAmount
         )
         
-        console.log('[v1] Takeover transaction sent:', takeoverTx.hash)
+        console.log('[v2] Takeover transaction sent:', takeoverTx.hash)
         statusDiv.textContent = 'Waiting for payment confirmation...'
         
         await takeoverTx.wait() // Wait for 1 confirmation
         
-        console.log('[v1] Transaction confirmed!')
+        console.log('[v2] Transaction confirmed!')
         statusDiv.textContent = 'Payment successful! Redirecting...'
         statusDiv.className = 'status success'
         
@@ -250,12 +256,21 @@ module.exports = async function handler(req, res) {
         }, 2000)
         
       } catch (error) {
-        console.error('[v1] Payment error:', error)
+        console.error('[v2] Payment error:', error)
         let errorMessage = error.message || 'Payment failed'
         if (error.data?.message) {
           errorMessage = error.data.message
         } else if (error.reason) {
           errorMessage = error.reason
+        }
+        
+        // Handle common contract errors
+        if (errorMessage.includes("Television__Expired")) {
+          errorMessage = "Transaction expired. Please try again."
+        } else if (errorMessage.includes("Television__EpochIdMismatch")) {
+          errorMessage = "Game state updated. Please refresh and try again."
+        } else if (errorMessage.includes("Television__MaxPaymentAmountExceeded")) {
+          errorMessage = "Price changed. Please refresh and try again."
         }
         
         statusDiv.textContent = 'Error: ' + errorMessage
@@ -264,21 +279,22 @@ module.exports = async function handler(req, res) {
       }
     })
     
-    console.log('[v1] Click handler attached')
+    console.log('[v2] Click handler attached')
     statusDiv.textContent = 'Ready to play'
   </script>
 </body>
 </html>`
 
-    console.log("[v1] Payment frame HTML generated")
+    console.log("[v2] Payment frame HTML generated")
 
     res.setHeader("Content-Type", "text/html; charset=utf-8")
     res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate")
     res.status(200).send(html)
 
-    console.log("[v1] Payment frame response sent")
+    console.log("[v2] Payment frame response sent")
   } catch (e) {
-    console.error("[v1] Error in payment frame:", e.message)
-    res.status(500).send(`Error: ${e.message}`)
+    console.error("[v2] Error in payment frame:", e.message)
+    // This will catch any errors *inside* the handler
+    res.status(500).send(`Server Error: ${e.message}`)
   }
 }
