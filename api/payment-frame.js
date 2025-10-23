@@ -1,8 +1,8 @@
 //
-// This is the full content for api/payment-frame.js (v6 - Syntax and ABI Fix)
+// This is the full content for api/payment-frame.js (v7 - Add Logging)
 //
 module.exports = async function handler(req, res) {
-  console.log("[v6] /api/payment-frame called - Method:", req.method)
+  console.log("[v7] /api/payment-frame called - Method:", req.method)
 
   try {
     const START_IMAGE_URL = process.env.START_IMAGE_URL || "https://i.imgur.com/IsUWL7j.png"
@@ -12,14 +12,14 @@ module.exports = async function handler(req, res) {
 
     // Validation
     if (!GAME_URL || !PUBLIC_URL || !BASE_PROVIDER_URL) {
-      console.error("[v6] ERROR: Missing env vars. Need GAME_URL, PUBLIC_URL, and NEXT_PUBLIC_BASE_PROVIDER_URL")
-      console.error(`[v6] GAME_URL: ${GAME_URL ? 'Set' : 'Missing'}`)
-      console.error(`[v6] PUBLIC_URL: ${PUBLIC_URL ? 'Set' : 'Missing'}`)
-      console.error(`[v6] BASE_PROVIDER_URL: ${BASE_PROVIDER_URL ? 'Set' : 'Missing'}`)
+      console.error("[v7] ERROR: Missing env vars. Need GAME_URL, PUBLIC_URL, and NEXT_PUBLIC_BASE_PROVIDER_URL")
+      console.error(`[v7] GAME_URL: ${GAME_URL ? 'Set' : 'Missing'}`)
+      console.error(`[v7] PUBLIC_URL: ${PUBLIC_URL ? 'Set' : 'Missing'}`)
+      console.error(`[v7] BASE_PROVIDER_URL: ${BASE_PROVIDER_URL ? 'Set' : 'Missing'}`)
       return res.status(500).send("Server configuration error: Missing required environment variables.")
     }
 
-    console.log("[v6] Payment frame loaded")
+    console.log("[v7] Payment frame loaded")
 
     const html = `<!DOCTYPE html>
 <html>
@@ -62,7 +62,7 @@ module.exports = async function handler(req, res) {
   </div>
 
   <script type="module">
-    console.log('[v6] Payment frame script starting')
+    console.log('[v7] Payment frame script starting')
     
     const { ethers } = await import('https://esm.sh/ethers@5.7.2')
     
@@ -80,7 +80,6 @@ module.exports = async function handler(req, res) {
     ]
     
     const contractAbi = [
-      // --- BUG FIX: Was uint26, changed to uint256 ---
       "function takeover(string memory uri, address channelOwner, uint256 epochId, uint256 deadline, uint256 maxPaymentAmount) external returns (uint256 paymentAmount)",
       "function getPrice() external view returns (uint256)",
       "function getSlot0() external view returns (tuple(uint8 locked, uint16 epochId, uint192 initPrice, uint40 startTime, address owner, string uri))"
@@ -93,19 +92,31 @@ module.exports = async function handler(req, res) {
     let readOnlyProvider;
     let readOnlyGameContract;
     try {
+      // --- NEW: Added detailed logging ---
+      console.log(\`[v7] Initializing read-only provider with URL: "\${BASE_PROVIDER_URL}"\`)
       readOnlyProvider = new ethers.providers.JsonRpcProvider(BASE_PROVIDER_URL);
       readOnlyGameContract = new ethers.Contract(CONTRACT_ADDRESS, contractAbi, readOnlyProvider);
+      console.log('[v7] Read-only provider and contract initialized.')
     } catch (e) {
-      console.error("[v6] Failed to create read-only provider:", e)
-      statusDiv.textContent = 'Error: Failed to connect to Base network.'
+      console.error("[v7] FAILED to create read-only provider:", e)
+      statusDiv.textContent = \`Error: Failed to init provider. (\${e.message})\`
       statusDiv.className = 'status error'
     }
 
     payButton.addEventListener('click', async () => {
-      console.log('[v6] Button clicked!')
+      console.log('[v7] Button clicked!')
       statusDiv.textContent = 'Initializing...'
       statusDiv.className = 'status loading'
       payButton.disabled = true
+
+      // --- NEW: Added check ---
+      if (!readOnlyProvider) {
+        console.error("[v7] Button clicked, but readOnlyProvider is not initialized.")
+        statusDiv.textContent = 'Error: Provider not initialized. Check console.'
+        statusDiv.className = 'status error'
+        payButton.disabled = false
+        return
+      }
       
       let price;
       let epochId;
@@ -113,7 +124,7 @@ module.exports = async function handler(req, res) {
       try {
         // --- 1. Get Game Data (Price and Epoch) via read-only provider ---
         statusDiv.textContent = 'Fetching current price...'
-        console.log('[v6] Fetching price and slot0 using read-only provider...')
+        console.log('[v7] Fetching price and slot0 using read-only provider...')
         
         price = await readOnlyGameContract.getPrice()
         const slot0 = await readOnlyGameContract.getSlot0()
@@ -121,33 +132,33 @@ module.exports = async function handler(req, res) {
         
         const priceInUsdc = ethers.utils.formatUnits(price, 6)
         
-        console.log(\`[v6] Current price: \${price.toString()} (\${priceInUsdc} USDC)\`)
-        console.log(\`[v6] Current epochId: \${epochId}\`)
+        console.log(\`[v7] Current price: \${price.toString()} (\${priceInUsdc} USDC)\`)
+        console.log(\`[v7] Current epochId: \${epochId}\`)
 
         if (price.isZero()) {
           throw new Error('Current price is zero. The epoch may have expired.')
         }
 
         // --- Now, connect to the user's wallet ---
-        console.log('[v6] Importing Farcaster SDK')
+        console.log('[v7] Importing Farcaster SDK')
         const { default: sdk } = await import('https://esm.sh/@farcaster/miniapp-sdk')
         
-        console.log('[v6] SDK imported, calling ready()')
+        console.log('[v7] SDK imported, calling ready()')
         await sdk.actions.ready()
         
-        console.log('[v6] Getting Ethereum provider from wallet')
+        console.log('[v7] Getting Ethereum provider from wallet')
         const provider = await sdk.wallet.getEthereumProvider()
         
         if (!provider) {
           throw new Error('Wallet provider not available')
         }
         
-        console.log('[v6] Provider obtained, requesting accounts')
+        console.log('[v7] Provider obtained, requesting accounts')
         statusDiv.textContent = 'Connecting wallet...'
         
         const accounts = await provider.request({ method: 'eth_requestAccounts' })
         const userAddress = accounts[0]
-        console.log('[v6] User address:', userAddress)
+        console.log('[v7] User address:', userAddress)
 
         // Ensure user is on the correct chain
         try {
@@ -171,29 +182,29 @@ module.exports = async function handler(req, res) {
         
         // --- 2. Check Allowance and Request Approval ---
         statusDiv.textContent = 'Checking USDC approval...'
-        console.log('[v6] Checking allowance...')
+        console.log('[v7] Checking allowance...')
         
         const currentAllowance = await usdcContract.allowance(userAddress, CONTRACT_ADDRESS)
-        console.log(\`[v6] Current allowance: \${currentAllowance.toString()}\`)
+        console.log(\`[v7] Current allowance: \${currentAllowance.toString()}\`)
         
         if (currentAllowance.lt(price)) {
-          console.log('[v6] Allowance is too low, requesting approval...')
+          console.log('[v7] Allowance is too low, requesting approval...')
           statusDiv.textContent = \`Please approve \${priceInUsdc} USDC...\`
           
           const approveTx = await usdcContract.approve(CONTRACT_ADDRESS, price)
-          console.log('[v6] Approval transaction sent:', approveTx.hash)
+          console.log('[v7] Approval transaction sent:', approveTx.hash)
           
           statusDiv.textContent = 'Waiting for approval confirmation...'
           await approveTx.wait() // Wait for 1 confirmation
           
-          console.log('[v6] Approval confirmed!')
+          console.log('[v7] Approval confirmed!')
         } else {
-          console.log('[v6] Approval already sufficient.')
+          console.log('[v7] Approval already sufficient.')
         }
 
         // --- 3. Call the 'takeover' function ---
         statusDiv.textContent = 'Finalizing payment...'
-        console.log('[v6] Preparing takeover transaction...')
+        console.log('[v7] Preparing takeover transaction...')
 
         const deadline = Math.floor(Date.now() / 1000) + 300 // 5-minute deadline
         const uri = "" 
@@ -207,12 +218,12 @@ module.exports = async function handler(req, res) {
           price // Use the fetched price as maxPaymentAmount
         )
         
-        console.log('[v6] Takeover transaction sent:', takeoverTx.hash)
+        console.log('[v7] Takeover transaction sent:', takeoverTx.hash)
         statusDiv.textContent = 'Waiting for payment confirmation...'
         
         await takeoverTx.wait() 
         
-        console.log('[v6] Transaction confirmed!')
+        console.log('[v7] Transaction confirmed!')
         statusDiv.textContent = 'Payment successful! Redirecting...'
         statusDiv.className = 'status success'
         
@@ -221,7 +232,7 @@ module.exports = async function handler(req, res) {
         }, 2000)
         
       } catch (error) {
-        console.error('[v6] Payment error:', error)
+        console.error('[v7] Payment error:', error)
         let errorMessage = error.message || 'Payment failed'
         if (error.data?.message) {
           errorMessage = error.data.message
@@ -236,7 +247,8 @@ module.exports = async function handler(req, res) {
           errorMessage = "Game state updated. Please refresh and try again."
         } else if (errorMessage.includes("Television__MaxPaymentAmountExceeded")) {
           errorMessage = "Price changed. Please refresh and try again."
-        } else if (errorMessage.includes("call exception")) {
+        } else if (errorMessage.includes("call exception") || errorMessage.includes("could not detect network")) {
+          // --- NEW: Added "could not detect network" ---
           errorMessage = "Network error or wrong wallet network. Please check your wallet and try again."
         }
         
@@ -246,21 +258,21 @@ module.exports = async function handler(req, res) {
       }
     })
     
-    console.log('[v6] Click handler attached')
+    console.log('[v7] Click handler attached')
     statusDiv.textContent = 'Ready to play'
   </script>
 </body>
-</html>` // --- BUG FIX: Removed the stray \ from the closing backtick ---
+</html>`
 
-    console.log("[v6] Payment frame HTML generated")
+    console.log("[v7] Payment frame HTML generated")
 
     res.setHeader("Content-Type", "text/html; charset=utf-8")
     res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate")
     res.status(200).send(html)
 
-    console.log("[v6] Payment frame response sent")
+    console.log("[v7] Payment frame response sent")
   } catch (e) {
-    console.error("[v6] FATAL ERROR in payment frame:", e.message)
+    console.error("[v7] FATAL ERROR in payment frame:", e.message)
     console.error(e) // Log the full error stack
     res.status(500).send(`Server Error: ${e.message}`)
   }
