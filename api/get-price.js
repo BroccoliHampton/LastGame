@@ -1,11 +1,10 @@
 //
-// This is the full content for api/get-price.js (v2)
+// This is the full content for api/get-price.js (v3)
 //
 const { ethers } = require("ethers");
 
 // --- START CONFIGURATION ---
 const BASE_PROVIDER_URL = process.env.BASE_PROVIDER_URL; 
-// Use lowercase addresses
 const CONTRACT_ADDRESS = '0x9c751e6825edaa55007160b99933846f6eceec9b';
 const USDC_ADDRESS = '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913';
 
@@ -34,48 +33,55 @@ if (BASE_PROVIDER_URL) {
 }
 
 module.exports = async function handler(req, res) {
-  console.log("[v2] /api/get-price called");
+  console.log("[v3] /api/get-price called");
   
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  // We now require a userAddress query parameter
+  // --- NEW: userAddress is now optional ---
   const { userAddress } = req.query;
 
-  if (!userAddress) {
-    console.log("[get-price] Error: Missing userAddress query parameter.");
-    return res.status(400).json({ error: 'Missing userAddress' });
-  }
-  
   if (!readOnlyGameContract || !readOnlyUsdcContract) {
     console.error("[get-price] Provider or contract not initialized. Check BASE_PROVIDER_URL env var.");
     return res.status(500).json({ error: "Server configuration error: Failed to connect to network." });
   }
 
   try {
-    // Checksum the address for safety (server-side)
-    const checksummedAddress = ethers.utils.getAddress(userAddress);
-    
-    // Fetch all 3 pieces of data in parallel
-    const [price, slot0, allowance] = await Promise.all([
+    // 1. Always fetch price and slot0
+    const [price, slot0] = await Promise.all([
       readOnlyGameContract.getPrice(),
       readOnlyGameContract.getSlot0(),
-      readOnlyUsdcContract.allowance(checksummedAddress, CONTRACT_ADDRESS)
     ]);
     
     const epochId = slot0.epochId;
-    const priceInUsdc = ethers.utils.formatUnits(price, 6); // 6 decimals for USDC
+    const priceInUsdc = ethers.utils.formatUnits(price, 6);
 
-    console.log(`[get-price] Fetched price: ${price.toString()}, epoch: ${epochId}, allowance: ${allowance.toString()}`);
+    // 2. If a userAddress is provided, ALSO fetch allowance
+    if (userAddress) {
+      const checksummedAddress = ethers.utils.getAddress(userAddress);
+      const allowance = await readOnlyUsdcContract.allowance(checksummedAddress, CONTRACT_ADDRESS);
+      
+      console.log(`[get-price] Fetched data for user: ${price.toString()}, epoch: ${epochId}, allowance: ${allowance.toString()}`);
+      
+      res.status(200).json({
+        price: price.toString(),
+        epochId: Number(epochId),
+        priceInUsdc: priceInUsdc,
+        allowance: allowance.toString()
+      });
 
-    // Send all data back to the client
-    res.status(200).json({
-      price: price.toString(),
-      epochId: Number(epochId),
-      priceInUsdc: priceInUsdc,
-      allowance: allowance.toString() // Send allowance back
-    });
+    } else {
+      // 3. If no userAddress, just return public price info
+      console.log(`[get-price] Fetched public price: ${price.toString()}, epoch: ${epochId}`);
+      
+      res.status(200).json({
+        price: price.toString(),
+        epochId: Number(epochId),
+        priceInUsdc: priceInUsdc,
+        allowance: null // No allowance to fetch
+      });
+    }
 
   } catch (error) {
     console.error("[get-price] Error fetching data from contract:", error.message);
