@@ -1,61 +1,84 @@
 //
-// This is the full content for the NEW file: api/get-price.js
+// This is the full content for api/get-price.js (v2)
 //
 const { ethers } = require("ethers");
 
 // --- START CONFIGURATION ---
-// We'll re-use the BASE_PROVIDER_URL you set for the verify.js file.
-// Make sure this is set in Vercel (e.g., your Alchemy URL)
 const BASE_PROVIDER_URL = process.env.BASE_PROVIDER_URL; 
-const CONTRACT_ADDRESS = '0x9C751E6825EDAa55007160b99933846f6ECeEc9B';
+// Use lowercase addresses
+const CONTRACT_ADDRESS = '0x9c751e6825edaa55007160b99933846f6eceec9b';
+const USDC_ADDRESS = '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913';
+
 const contractAbi = [
   "function getPrice() external view returns (uint256)",
   "function getSlot0() external view returns (tuple(uint8 locked, uint16 epochId, uint192 initPrice, uint40 startTime, address owner, string uri))"
+];
+const usdcAbi = [
+  "function allowance(address owner, address spender) external view returns (uint256)"
 ];
 // --- END CONFIGURATION ---
 
 let readOnlyProvider;
 let readOnlyGameContract;
+let readOnlyUsdcContract;
 
-// Initialize provider and contract outside the handler for reuse
+// Initialize providers and contracts outside the handler for reuse
 if (BASE_PROVIDER_URL) {
   try {
     readOnlyProvider = new ethers.providers.JsonRpcProvider(BASE_PROVIDER_URL);
     readOnlyGameContract = new ethers.Contract(CONTRACT_ADDRESS, contractAbi, readOnlyProvider);
+    readOnlyUsdcContract = new ethers.Contract(USDC_ADDRESS, usdcAbi, readOnlyProvider);
   } catch (e) {
     console.error("[get-price] FAILED to create read-only provider:", e.message);
   }
 }
 
 module.exports = async function handler(req, res) {
-  console.log("[v1] /api/get-price called");
+  console.log("[v2] /api/get-price called");
   
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  if (!readOnlyGameContract) {
+  // We now require a userAddress query parameter
+  const { userAddress } = req.query;
+
+  if (!userAddress) {
+    console.log("[get-price] Error: Missing userAddress query parameter.");
+    return res.status(400).json({ error: 'Missing userAddress' });
+  }
+  
+  if (!readOnlyGameContract || !readOnlyUsdcContract) {
     console.error("[get-price] Provider or contract not initialized. Check BASE_PROVIDER_URL env var.");
     return res.status(500).json({ error: "Server configuration error: Failed to connect to network." });
   }
 
   try {
-    const price = await readOnlyGameContract.getPrice();
-    const slot0 = await readOnlyGameContract.getSlot0();
+    // Checksum the address for safety (server-side)
+    const checksummedAddress = ethers.utils.getAddress(userAddress);
+    
+    // Fetch all 3 pieces of data in parallel
+    const [price, slot0, allowance] = await Promise.all([
+      readOnlyGameContract.getPrice(),
+      readOnlyGameContract.getSlot0(),
+      readOnlyUsdcContract.allowance(checksummedAddress, CONTRACT_ADDRESS)
+    ]);
+    
     const epochId = slot0.epochId;
     const priceInUsdc = ethers.utils.formatUnits(price, 6); // 6 decimals for USDC
 
-    console.log(`[get-price] Fetched price: ${price.toString()}, epoch: ${epochId}`);
+    console.log(`[get-price] Fetched price: ${price.toString()}, epoch: ${epochId}, allowance: ${allowance.toString()}`);
 
-    // Send data back to the client-side script
+    // Send all data back to the client
     res.status(200).json({
-      price: price.toString(), // Send as string to avoid JSON issues
-      epochId: Number(epochId), // Send as number
-      priceInUsdc: priceInUsdc
+      price: price.toString(),
+      epochId: Number(epochId),
+      priceInUsdc: priceInUsdc,
+      allowance: allowance.toString() // Send allowance back
     });
 
   } catch (error) {
-    console.error("[get-price] Error fetching price from contract:", error.message);
+    console.error("[get-price] Error fetching data from contract:", error.message);
     res.status(500).json({ error: `Contract read error: ${error.message}` });
   }
 };
