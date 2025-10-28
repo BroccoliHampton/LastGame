@@ -129,8 +129,8 @@ module.exports = async function handler(req, res) {
 </head>
 <body>
   <div class="container">
-    <h1>🎮 Last Game</h1>
-    <p>Pay to play and earn $T0 until someone else plays. 90% of game price goes to the player of the last game</p>
+    <h1>Waddup Glazer!</h1>
+    <p>Pay to glaze and earn $DONUT until someone else glazes. Glaze price doubles when someone glazes, and cools off back to $1 over an hour. 90% of glaze price goes to the previous glazer</p>
     
     <button id="payButton">Pay to Play</button>
     <div id="status" class="status"></div>
