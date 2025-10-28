@@ -1,8 +1,8 @@
 //
-// FIXED payment-frame.js with proper error handling
+// This is the full content for api/payment-frame.js (v19 - Syntax Fix)
 //
 module.exports = async function handler(req, res) {
-  console.log("[v20-fixed] /api/payment-frame called - Method:", req.method)
+  console.log("[v19-style] /api/payment-frame called - Method:", req.method)
 
   try {
     const START_IMAGE_URL = process.env.START_IMAGE_URL || "https://i.imgur.com/IsUWL7j.png"
@@ -11,11 +11,11 @@ module.exports = async function handler(req, res) {
 
     // Validation
     if (!GAME_URL || !PUBLIC_URL) {
-      console.error("[v20-fixed] ERROR: Missing GAME_URL or PUBLIC_URL env vars")
+      console.error("[v19-style] ERROR: Missing GAME_URL or PUBLIC_URL env vars")
       return res.status(500).send("Server configuration error: Missing required environment variables.")
     }
 
-    console.log("[v20-fixed] Payment frame loaded")
+    console.log("[v19-style] Payment frame loaded")
 
     const html = `<!DOCTYPE html>
 <html>
@@ -31,13 +31,16 @@ module.exports = async function handler(req, res) {
     body {
       margin: 0;
       padding: 0;
+      /* Classic 8-bit dark purple background */
       background: #2a2a3a;
+      /* Pixel font for everything */
       font-family: 'Press Start 2P', cursive;
-      color: #f0f0f0;
+      color: #f0f0f0; /* Off-white text */
       display: flex;
       align-items: center;
       justify-content: center;
       min-height: 100vh;
+      /* For sharp pixel rendering */
       image-rendering: pixelated;
     }
     .container {
@@ -46,37 +49,46 @@ module.exports = async function handler(req, res) {
       max-width: 400px;
     }
     h1 {
-      font-size: 1.5rem;
+      font-size: 1.5rem; /* Pixel fonts are big, scale it down */
       margin-bottom: 1.5rem;
       color: #ffffff;
     }
     p {
-      font-size: 0.8rem;
+      font-size: 0.8rem; /* Scaled down for pixel font */
       margin-bottom: 2rem;
-      line-height: 1.5;
+      line-height: 1.5; /* Add spacing for readability */
       opacity: 0.9;
     }
     button {
+      /* Use the pixel font */
       font-family: 'Press Start 2P', cursive;
       font-size: 0.9rem;
       font-weight: 600;
-      background: #f0f0f0;
-      color: #2a2a3a;
-      border: 2px solid #ffffff;
+      
+      /* 8-bit button style */
+      background: #f0f0f0; /* Light background */
+      color: #2a2a3a;     /* Dark text */
+      border: 2px solid #ffffff; /* White border */
       padding: 1rem 1.5rem;
-      border-radius: 0;
+      border-radius: 0; /* Sharp corners */
       cursor: pointer;
-      box-shadow: 4px 4px 0px #1a1a2a;
+      
+      /* 8-bit shadow */
+      box-shadow: 4px 4px 0px #1a1a2a; /* Darker bg color for shadow */
+      
       transition: transform 0.1s, box-shadow 0.1s;
+      
       pointer-events: auto;
       position: relative;
       z-index: 10;
     }
     button:hover {
+      /* "Press" effect */
       transform: translate(2px, 2px);
       box-shadow: 2px 2px 0px #1a1a2a;
     }
     button:active {
+      /* Full press effect */
       transform: translate(4px, 4px);
       box-shadow: 0px 0px 0px #1a1a2a;
     }
@@ -95,13 +107,13 @@ module.exports = async function handler(req, res) {
       line-height: 1.4;
     }
     .error {
-      color: #ff6b6b;
+      color: #ff6b6b; /* Bright 8-bit red */
     }
     .success {
-      color: #73ff73;
+      color: #73ff73; /* Bright 8-bit green */
     }
     .loading {
-      color: #ffff73;
+      color: #ffff73; /* Bright 8-bit yellow */
     }
   </style>
   <meta property="fc:frame" content="vNext" />
@@ -117,15 +129,15 @@ module.exports = async function handler(req, res) {
 </head>
 <body>
   <div class="container">
-    <h1>Waddup Glazer!</h1>
-    <p>Pay to glaze and earn $DONUT until someone else glazes. Glaze price doubles when someone glazes, and cools off back to $1 over an hour. 90% of glaze price goes to the previous glazer</p>
+    <h1>🎮 Last Game</h1>
+    <p>Pay to play and earn $T0 until someone else plays. 90% of game price goes to the player of the last game</p>
     
     <button id="payButton">Pay to Play</button>
     <div id="status" class="status"></div>
   </div>
 
   <script type="module">
-    console.log('[v20-fixed] Payment frame script starting')
+    console.log('[v19-style] Payment frame script starting')
     
     const { ethers } = await import('https://esm.sh/ethers@5.7.2')
     
@@ -146,66 +158,20 @@ module.exports = async function handler(req, res) {
     const contractAbi = [
       "function takeover(string memory uri, address channelOwner, uint256 epochId, uint256 deadline, uint256 maxPaymentAmount) external returns (uint256 paymentAmount)",
     ]
+    // --- END CONFIGURATION ---
 
     const payButton = document.getElementById('payButton')
     const statusDiv = document.getElementById('status')
 
-    // Helper function to extract error message safely
-    function getErrorMessage(error) {
-      console.error('[v20-fixed] Full error object:', error);
-      
-      // Try multiple ways to get error message
-      let errorMessage = 'Payment failed';
-      
-      if (typeof error === 'string') {
-        errorMessage = error;
-      } else if (error?.message) {
-        errorMessage = error.message;
-      } else if (error?.reason) {
-        errorMessage = error.reason;
-      } else if (error?.data?.message) {
-        errorMessage = error.data.message;
-      } else if (error?.error?.message) {
-        errorMessage = error.error.message;
-      }
-      
-      // Check for specific error patterns
-      const errorStr = String(errorMessage).toLowerCase();
-      
-      if (errorStr.includes("eth_estimategas") || errorStr.includes("unsupportedmethoderror")) {
-        return "Your wallet does not support this action. Please try a different wallet.";
-      } else if (errorStr.includes("television__expired")) {
-        return "Transaction expired. Please try again.";
-      } else if (errorStr.includes("television__epochidmismatch")) {
-        return "Game state updated. Please refresh and try again.";
-      } else if (errorStr.includes("television__maxpaymentamountexceeded")) {
-        return "Price changed. Please refresh and try again.";
-      } else if (errorStr.includes("call exception") || errorStr.includes("could not detect network")) {
-        return "Network error or wrong wallet network. Please check your wallet and try again.";
-      } else if (errorStr.includes("bad address checksum")) {
-        return "Wallet address error. Please try reconnecting.";
-      } else if (errorStr.includes("timeout")) {
-        return "Confirmation timed out. Please try again.";
-      } else if (errorStr.includes("user rejected") || errorStr.includes("user denied")) {
-        return "Transaction cancelled by user.";
-      } else if (errorStr.includes("insufficient funds")) {
-        return "Insufficient funds in your wallet.";
-      } else if (errorStr.includes("nonce")) {
-        return "Transaction error. Please try again.";
-      }
-      
-      return errorMessage;
-    }
-
     // --- Function to pre-load price ---
     async function loadPrice() {
-      console.log('[v20-fixed] Pre-loading price...')
+      console.log('[v19-style] Pre-loading price...')
       statusDiv.textContent = 'Fetching price...'
       statusDiv.className = 'status loading'
       payButton.disabled = true;
 
       try {
-        const response = await fetch(\`/api/get-price\`);
+        const response = await fetch(\`/api/get-price\`); // No user address
         const data = await response.json();
 
         if (!response.ok) {
@@ -226,15 +192,16 @@ module.exports = async function handler(req, res) {
         statusDiv.className = 'status';
 
       } catch (e) {
-        console.error("Error pre-loading price:", e)
-        statusDiv.textContent = \`Error: \${getErrorMessage(e)}\`
+        console.error("Error pre-loading price:", e.message)
+        statusDiv.textContent = \`Error: \${e.message}\`
         statusDiv.className = 'status error'
         payButton.textContent = 'Error'
       }
     }
+    // --- END ---
 
     payButton.addEventListener('click', async () => {
-      console.log('[v20-fixed] Button clicked!')
+      console.log('[v19-style] Button clicked!')
       statusDiv.textContent = 'Initializing...'
       statusDiv.className = 'status loading'
       payButton.disabled = true
@@ -246,27 +213,27 @@ module.exports = async function handler(req, res) {
 
       try {
         // --- 1. Connect to wallet FIRST ---
-        console.log('[v20-fixed] Importing Farcaster SDK')
+        console.log('[v19-style] Importing Farcaster SDK')
         const { default: sdk } = await import('https://esm.sh/@farcaster/miniapp-sdk')
         
-        console.log('[v20-fixed] SDK imported, calling ready()')
+        console.log('[v19-style] SDK imported, calling ready()')
         await sdk.actions.ready()
         
-        console.log('[v20-fixed] Getting Ethereum provider from wallet')
+        console.log('[v19-style] Getting Ethereum provider from wallet')
         const provider = await sdk.wallet.getEthereumProvider()
         
         if (!provider) {
           throw new Error('Wallet provider not available')
         }
         
-        console.log('[v20-fixed] Provider obtained, requesting accounts')
+        console.log('[v19-style] Provider obtained, requesting accounts')
         statusDiv.textContent = 'Connecting wallet...'
         
         const accounts = await provider.request({ method: 'eth_requestAccounts' })
         
         const rawUserAddress = accounts[0]
         const userAddress = ethers.utils.getAddress(rawUserAddress)
-        console.log(\`[v20-fixed] User address: \${userAddress}\`)
+        console.log(\`[v19-style] User address: \${userAddress}\`)
 
         // Ensure user is on the correct chain
         try {
@@ -283,7 +250,7 @@ module.exports = async function handler(req, res) {
         
         // --- 2. Get Game Data (Price, Epoch, Allowance) via OUR server ---
         statusDiv.textContent = 'Fetching game data...'
-        console.log(\`[v20-fixed] Fetching data from /api/get-price?userAddress=\${userAddress}\`)
+        console.log(\`[v19-style] Fetching data from /api/get-price?userAddress=\${userAddress}\`)
         
         const response = await fetch(\`/api/get-price?userAddress=\${userAddress}\`);
         const data = await response.json();
@@ -295,9 +262,9 @@ module.exports = async function handler(req, res) {
         price = ethers.BigNumber.from(data.price);
         epochId = data.epochId;
         priceInUsdc = data.priceInUsdc;
-        currentAllowance = ethers.BigNumber.from(data.allowance || '0');
+        currentAllowance = ethers.BigNumber.from(data.allowance);
         
-        console.log(\`[v20-fixed] Price: \${price.toString()}, Epoch: \${epochId}, Allowance: \${currentAllowance.toString()}\`)
+        console.log(\`[v19-style] Price: \${price.toString()}, Epoch: \${epochId}, Allowance: \${currentAllowance.toString()}\`)
 
         // Update button text *again* in case price changed
         if (price.isZero()) {
@@ -316,16 +283,16 @@ module.exports = async function handler(req, res) {
         // --- 4. Check Allowance and Request Approval (SKIP IF PRICE IS ZERO) ---
         if (price.gt(0)) { 
           statusDiv.textContent = 'Checking USDC approval...'
-          console.log('[v20-fixed] Price > 0. Checking allowance...')
+          console.log('[v19-style] Price > 0. Checking allowance...')
           
           if (currentAllowance.lt(price)) {
-            console.log('[v20-fixed] Allowance is too low, requesting approval...')
+            console.log('[v19-style] Allowance is too low, requesting approval...')
             statusDiv.textContent = \`Please approve \${priceInUsdc} USDC...\`
             
             const approveTx = await usdcContract.approve(CONTRACT_ADDRESS, price, { 
               gasLimit: APPROVE_GAS_LIMIT 
             })
-            console.log('[v20-fixed] Approval transaction sent:', approveTx.hash)
+            console.log('[v19-style] Approval transaction sent:', approveTx.hash)
             
             statusDiv.textContent = 'Waiting for approval (1/2)...'
             const approvePoll = await fetch(\`/api/check-tx?txHash=\${approveTx.hash}\`);
@@ -334,13 +301,13 @@ module.exports = async function handler(req, res) {
             if (!approvePoll.ok || approveData.status !== 'confirmed') {
               throw new Error(approveData.error || 'Approval transaction failed.');
             }
-            console.log('[v20-fixed] Approval confirmed by server!')
+            console.log('[v19-style] Approval confirmed by server!')
             
           } else {
-            console.log('[v20-fixed] Approval already sufficient.')
+            console.log('[v19-style] Approval already sufficient.')
           }
         } else {
-          console.log('[v20-fixed] Price is 0. Skipping approval.')
+          console.log('[v19-style] Price is 0. Skipping approval.')
         }
 
         // --- 5. Call the 'takeover' function ---
@@ -349,7 +316,7 @@ module.exports = async function handler(req, res) {
         } else {
           statusDiv.textContent = 'Finalizing payment (2/2)...'
         }
-        console.log('[v20-fixed] Preparing takeover transaction...')
+        console.log('[v19-style] Preparing takeover transaction...')
 
         const deadline = Math.floor(Date.now() / 1000) + 300 // 5-minute deadline
         const uri = "" 
@@ -364,7 +331,7 @@ module.exports = async function handler(req, res) {
           { gasLimit: TAKEOVER_GAS_LIMIT }
         )
         
-        console.log('[v20-fixed] Takeover transaction sent:', takeoverTx.hash)
+        console.log('[v19-style] Takeover transaction sent:', takeoverTx.hash)
         
         statusDiv.textContent = 'Waiting for final confirmation (2/2)...'
         const takeoverPoll = await fetch(\`/api/check-tx?txHash=\${takeoverTx.hash}\`);
@@ -373,7 +340,7 @@ module.exports = async function handler(req, res) {
         if (!takeoverPoll.ok || takeoverData.status !== 'confirmed') {
           throw new Error(takeoverData.error || 'Payment transaction failed.');
         }
-        console.log('[v20-fixed] Payment confirmed by server!')
+        console.log('[v19-style] Payment confirmed by server!')
         
         statusDiv.textContent = 'Success! Redirecting...'
         statusDiv.className = 'status success'
@@ -383,7 +350,32 @@ module.exports = async function handler(req, res) {
         }, 2000)
         
       } catch (error) {
-        const errorMessage = getErrorMessage(error);
+        console.error('[v19-style] Payment error:', error)
+        let errorMessage = error.message || 'Payment failed'
+        if (error.data?.message) {
+          errorMessage = error.data.message
+        } else if (error.reason) {
+          errorMessage = error.reason
+        }
+        
+        // --- SYNTAX FIX: Changed 'else.if' to 'else if' ---
+        if (errorMessage.includes("eth_estimateGas") || errorMessage.includes("UnsupportedMethodError")) {
+          errorMessage = "Your wallet does not support this action. Please try a different wallet."
+        } else if (errorMessage.includes("Television__Expired")) {
+          errorMessage = "Transaction expired. Please try again."
+        } else if (errorMessage.includes("Television__EpochIdMismatch")) {
+          errorMessage = "Game state updated. Please refresh and try again."
+        } else if (errorMessage.includes("Television__MaxPaymentAmountExceeded")) {
+          errorMessage = "Price changed. Please refresh and try again."
+        } else if (errorMessage.includes("call exception") || errorMessage.includes("could not detect network")) {
+          errorMessage = "Network error or wrong wallet network. Please check your wallet and try again."
+        } else if (errorMessage.includes("bad address checksum")) {
+          errorMessage = "Wallet address error. Please try reconnecting."
+        } else if (errorMessage.includes("Transaction timed out")) {
+          errorMessage = "Confirmation timed out. Please try again."
+        }
+        // --- END FIX ---
+        
         statusDiv.textContent = 'Error: ' + errorMessage
         statusDiv.className = 'status error'
         payButton.disabled = false
@@ -397,16 +389,16 @@ module.exports = async function handler(req, res) {
 </body>
 </html>`
 
-    console.log("[v20-fixed] Payment frame HTML generated")
+    console.log("[v19-style] Payment frame HTML generated")
 
     res.setHeader("Content-Type", "text/html; charset=utf-8")
     res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate")
     res.status(200).send(html)
 
-    console.log("[v20-fixed] Payment frame response sent")
+    console.log("[v19-style] Payment frame response sent")
   } catch (e) {
-    console.error("[v20-fixed] FATAL ERROR in payment frame:", e.message)
-    console.error(e)
+    console.error("[v19-style] FATAL ERROR in payment frame:", e.message)
+    console.error(e) // Log the full error stack
     res.status(500).send(`Server Error: ${e.message}`)
   }
 }
