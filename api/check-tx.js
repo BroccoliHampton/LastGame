@@ -1,5 +1,5 @@
 //
-// This is the full content for the NEW file: api/check-tx.js
+// This is the full content for api/check-tx.js (v2 - with CORS)
 //
 const { ethers } = require("ethers");
 
@@ -17,7 +17,17 @@ if (BASE_PROVIDER_URL) {
 }
 
 module.exports = async function handler(req, res) {
-  console.log("[v1] /api/check-tx called");
+  console.log("[v2] /api/check-tx called");
+
+  // Add CORS headers
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  
+  // Handle preflight OPTIONS request
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
 
   if (!readOnlyProvider) {
     console.error("[check-tx] Provider not initialized. Check BASE_PROVIDER_URL env var.");
