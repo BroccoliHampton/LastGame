@@ -1,5 +1,5 @@
 //
-// This is the full content for api/get-price.js (v3)
+// This is the full content for api/get-price.js (v4 - with CORS)
 //
 const { ethers } = require("ethers");
 
@@ -33,7 +33,17 @@ if (BASE_PROVIDER_URL) {
 }
 
 module.exports = async function handler(req, res) {
-  console.log("[v3] /api/get-price called");
+  console.log("[v4] /api/get-price called");
+  
+  // Add CORS headers to allow requests from your game domain
+  res.setHeader('Access-Control-Allow-Origin', '*'); // Allow all origins, or specify your game domain
+  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  
+  // Handle preflight OPTIONS request
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
   
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' });
