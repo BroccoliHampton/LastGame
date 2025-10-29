@@ -1,5 +1,5 @@
 //
-// api/get-game-state.js - FIXED ABI VERSION
+// api/get-game-state.js - CORRECT VERSION based on actual contract
 //
 const { ethers } = require("ethers");
 
@@ -8,21 +8,22 @@ const BASE_PROVIDER_URL = process.env.BASE_PROVIDER_URL;
 const MULTICALL_ADDRESS = '0x88e52940E62E150619cAa54b1bc51b1103a2EA9F';
 const MINER_ADDRESS = '0x3EE441030984ACfeCf17FDa6953bea00a8c53Fa7';
 
-// CORRECTED ABI - The issue is the tuple structure
-// Based on the error, the contract returns data but in a different format
+// CORRECT ABI - From actual verified contract on BaseScan
 const multicallAbi = [
-  // Try this simpler structure first
   `function getMiner(address account) external view returns (
-    uint16 epochId,
-    uint192 initPrice,
-    uint40 startTime,
-    uint256 balance,
-    uint256 donuts,
-    uint256 price,
-    uint256 dps,
-    uint256 nextDps,
-    address miner,
-    string uri
+    tuple(
+      uint16 epochId,
+      uint192 initPrice,
+      uint40 startTime,
+      uint256 glazed,
+      uint256 price,
+      uint256 dps,
+      uint256 nextDps,
+      address miner,
+      string uri,
+      uint256 ethBalance,
+      uint256 donutBalance
+    ) state
   )`
 ];
 
@@ -80,29 +81,14 @@ module.exports = async function handler(req, res) {
     
     console.log(`[get-game-state] Fetching state for address: ${address}`);
 
-    // Get all game state from Multicall - now with corrected ABI
-    const result = await multicallContract.getMiner(address);
-    console.log("[get-game-state] Multicall returned:", result);
+    // Get all game state from Multicall - with CORRECT ABI
+    const minerState = await multicallContract.getMiner(address);
     
-    // The result is now an array, not a tuple object
-    // Unpack based on the return order
-    const [
-      epochId,
-      initPrice,
-      startTime,
-      balance,
-      donuts,
-      price,
-      dps,
-      nextDps,
-      miner,
-      uri
-    ] = result;
-    
-    console.log("[get-game-state] Unpacked values:");
-    console.log("  - epochId:", epochId);
-    console.log("  - price:", ethers.utils.formatEther(price), "ETH");
-    console.log("  - miner:", miner);
+    console.log("[get-game-state] Multicall returned successfully");
+    console.log("  - epochId:", minerState.epochId);
+    console.log("  - price:", ethers.utils.formatEther(minerState.price), "ETH");
+    console.log("  - miner:", minerState.miner);
+    console.log("  - glazed (claimable):", ethers.utils.formatEther(minerState.glazed), "DONUT");
     
     // Get additional data from Miner contract
     const [contractStartTime, halvingPeriod, donutAddress, totalSupply] = await Promise.all([
@@ -123,40 +109,39 @@ module.exports = async function handler(req, res) {
     const nextHalvingTime = contractStartTime.toNumber() + ((currentHalvingPeriod + 1) * halvingPeriod.toNumber());
     const secondsUntilHalving = Math.max(0, nextHalvingTime - currentTime);
 
-    // Calculate claimable donuts for current miner
-    const timeAsMiner = Math.max(0, currentTime - startTime);
-    const claimableDonuts = ethers.BigNumber.from(timeAsMiner).mul(dps);
+    // Time as miner
+    const timeAsMiner = Math.max(0, currentTime - minerState.startTime);
 
     // Format response
     const response = {
       // Basic game state
-      epochId: epochId,
-      currentMiner: miner,
-      price: price.toString(),
-      priceInEth: ethers.utils.formatEther(price),
+      epochId: minerState.epochId,
+      currentMiner: minerState.miner,
+      price: minerState.price.toString(),
+      priceInEth: ethers.utils.formatEther(minerState.price),
       
       // DPS info
-      currentDps: dps.toString(),
-      currentDpsFormatted: ethers.utils.formatEther(dps),
-      nextDps: nextDps.toString(),
-      nextDpsFormatted: ethers.utils.formatEther(nextDps),
+      currentDps: minerState.dps.toString(),
+      currentDpsFormatted: ethers.utils.formatEther(minerState.dps),
+      nextDps: minerState.nextDps.toString(),
+      nextDpsFormatted: ethers.utils.formatEther(minerState.nextDps),
       
       // Timing
-      startTime: startTime,
+      startTime: minerState.startTime,
       currentTime: currentTime,
       timeAsMiner: timeAsMiner,
       secondsUntilHalving: secondsUntilHalving,
       
-      // User data (only if address provided)
+      // User data
       userAddress: address === ethers.constants.AddressZero ? null : address,
-      userEthBalance: balance.toString(),
-      userEthBalanceFormatted: ethers.utils.formatEther(balance),
-      userDonutBalance: donuts.toString(),
-      userDonutBalanceFormatted: ethers.utils.formatEther(donuts),
+      userEthBalance: minerState.ethBalance.toString(),
+      userEthBalanceFormatted: ethers.utils.formatEther(minerState.ethBalance),
+      userDonutBalance: minerState.donutBalance.toString(),
+      userDonutBalanceFormatted: ethers.utils.formatEther(minerState.donutBalance),
       
-      // Claimable (for current miner)
-      claimableDonuts: claimableDonuts.toString(),
-      claimableDonutsFormatted: ethers.utils.formatEther(claimableDonuts),
+      // Claimable (already calculated by contract as "glazed")
+      claimableDonuts: minerState.glazed.toString(),
+      claimableDonutsFormatted: ethers.utils.formatEther(minerState.glazed),
       
       // Supply info
       totalDonutSupply: totalSupply.toString(),
@@ -167,7 +152,7 @@ module.exports = async function handler(req, res) {
       donutContract: donutAddress,
       
       // URI
-      uri: uri
+      uri: minerState.uri
     };
 
     console.log("[get-game-state] State fetched successfully");
@@ -176,11 +161,9 @@ module.exports = async function handler(req, res) {
   } catch (error) {
     console.error("[get-game-state] ERROR:", error);
     console.error("[get-game-state] Error message:", error.message);
-    console.error("[get-game-state] Error stack:", error.stack);
     
     res.status(500).json({ 
-      error: `Failed to fetch game state: ${error.message}`,
-      code: error.code
+      error: `Failed to fetch game state: ${error.message}`
     });
   }
 };
