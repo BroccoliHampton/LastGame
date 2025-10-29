@@ -11,12 +11,24 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { player, provider } = req.query;
+    const { player } = req.query; // 'player' is the user's address, 'provider' (referral) is now an ENV var
 
     if (!player) {
       return res.status(400).json({ error: 'Player address required' });
     }
 
+    // --- FIX START: Use Environment Variable for the provider address ---
+    const REFERRAL_PROVIDER_ADDRESS = process.env.YOUR_WALLET_ADDRESS;
+    
+    if (!REFERRAL_PROVIDER_ADDRESS || !ethers.utils.isAddress(REFERRAL_PROVIDER_ADDRESS)) {
+        console.error('Missing or invalid YOUR_WALLET_ADDRESS environment variable.');
+        return res.status(500).json({ error: 'Server configuration error: Missing provider address.' });
+    }
+    
+    const providerAddress = REFERRAL_PROVIDER_ADDRESS;
+    console.log('Using referral provider address:', providerAddress);
+    // --- FIX END ---
+    
     // Contract addresses
     const MINER_ADDRESS = '0x3EE441030984ACfeCf17FDa6953bea00a8c53Fa7';
     
@@ -38,10 +50,10 @@ export default async function handler(req, res) {
 
     // Encode the transaction data - using ethers v5 syntax
     const iface = new ethers.utils.Interface(MINER_ABI);
-    const providerAddress = provider || ethers.constants.AddressZero;
-    const data = iface.encodeFunctionData('mine', [providerAddress]);
+    // The providerAddress variable now holds the value of YOUR_WALLET_ADDRESS
+    const data = iface.encodeFunctionData('mine', [providerAddress]); 
 
-    // CRITICAL FIX: Convert price to hex format properly
+    // Convert price to hex format properly
     const valueInHex = '0x' + price.toBigInt().toString(16);
     
     console.log('Price in wei:', price.toString());
@@ -55,7 +67,7 @@ export default async function handler(req, res) {
         abi: MINER_ABI,
         to: MINER_ADDRESS,
         data: data,
-        value: valueInHex, // ✅ NOW IN HEX FORMAT
+        value: valueInHex,
       }
     };
 
