@@ -11,47 +11,60 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { player } = req.query; // 'player' is the user's address, 'provider' (referral) is now an ENV var
+    const { player } = req.query;
 
     if (!player) {
       return res.status(400).json({ error: 'Player address required' });
     }
 
-    // --- FIX START: Use Environment Variable for the provider address ---
-    const REFERRAL_PROVIDER_ADDRESS = process.env.YOUR_WALLET_ADDRESS;
-    
+    // --- CONFIGURATION ---
+    const MINER_ADDRESS = '0x3EE441030984ACfeCf17FDa6953bea00a8c53Fa7';
+    const RPC_URL = 'https://mainnet.base.org';
+    const REFERRAL_PROVIDER_ADDRESS = process.env.YOUR_WALLET_ADDRESS; // Your Vercel ENV var
+
     if (!REFERRAL_PROVIDER_ADDRESS || !ethers.utils.isAddress(REFERRAL_PROVIDER_ADDRESS)) {
         console.error('Missing or invalid YOUR_WALLET_ADDRESS environment variable.');
-        return res.status(500).json({ error: 'Server configuration error: Missing provider address.' });
+        // Fallback to AddressZero if ENV is missing (if the contract allows it)
+        const providerAddress = ethers.constants.AddressZero;
+        console.log('Falling back to AddressZero for provider.');
     }
-    
     const providerAddress = REFERRAL_PROVIDER_ADDRESS;
-    console.log('Using referral provider address:', providerAddress);
-    // --- FIX END ---
-    
-    // Contract addresses
-    const MINER_ADDRESS = '0x3EE441030984ACfeCf17FDa6953bea00a8c53Fa7';
-    
-    // Miner ABI - just the mine function
+    // --- END CONFIGURATION ---
+
+    // --- 1. CORRECTED MINER ABI ---
     const MINER_ABI = [
-      'function mine(address provider) external payable'
+      'function mine(address miner, address provider, uint256 epochId, uint256 deadline, uint256 maxPrice, string memory uri) external payable'
     ];
-
-    // Get current price from blockchain - using ethers v5 syntax
-    const RPC_URL = 'https://mainnet.base.org';
+    
+    const slot0Abi = ['function getSlot0() external view returns (tuple(uint8 locked, uint16 epochId, uint192 initPrice, uint40 startTime, uint256 dps, address miner, string uri))'];
+    
+    // Setup Ethers
     const providerRpc = new ethers.providers.JsonRpcProvider(RPC_URL);
-    const minerContract = new ethers.Contract(MINER_ADDRESS, [
-      'function getPrice() external view returns (uint256)'
-    ], providerRpc);
+    const minerContract = new ethers.Contract(MINER_ADDRESS, MINER_ABI.concat(['function getPrice() external view returns (uint256)']).concat(slot0Abi), providerRpc);
 
-    const price = await minerContract.getPrice();
+    // --- 2. FETCH PRICE & SLOT0 ---
+    const [price, slot0] = await Promise.all([
+        minerContract.getPrice(),
+        minerContract.getSlot0(),
+    ]);
     
     console.log('Current price from contract:', price.toString());
 
-    // Encode the transaction data - using ethers v5 syntax
+    // --- 3. CALCULATE TRANSACTION PARAMETERS ---
+    const currentTime = Math.floor(Date.now() / 1000);
+
+    const params = [
+        player,                             // 1. miner: The user's address (new miner)
+        providerAddress,                    // 2. provider: Your referral address
+        slot0.epochId,                      // 3. epochId: Current epoch ID
+        currentTime + 300,                  // 4. deadline: 5 minutes from now
+        price,                              // 5. maxPrice: Current price (no slippage allowed)
+        "Donut Miner on Farcaster"          // 6. uri: The URI string
+    ];
+
+    // --- 4. ENCODE FUNCTION DATA ---
     const iface = new ethers.utils.Interface(MINER_ABI);
-    // The providerAddress variable now holds the value of YOUR_WALLET_ADDRESS
-    const data = iface.encodeFunctionData('mine', [providerAddress]); 
+    const data = iface.encodeFunctionData('mine', params);
 
     // Convert price to hex format properly
     const valueInHex = '0x' + price.toBigInt().toString(16);
@@ -59,9 +72,9 @@ export default async function handler(req, res) {
     console.log('Price in wei:', price.toString());
     console.log('Price in hex:', valueInHex);
 
-    // Return transaction params in the format Farcaster expects
+    // Return transaction params
     const txData = {
-      chainId: 'eip155:8453', // Base chain ID in CAIP-2 format
+      chainId: 'eip155:8453', // Base chain ID
       method: 'eth_sendTransaction',
       params: {
         abi: MINER_ABI,
