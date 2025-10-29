@@ -24,6 +24,17 @@ module.exports = async function handler(req, res) {
   console.log("[transaction] /api/transaction called");
   console.log("[transaction] Request method:", req.method);
 
+  // CRITICAL: Add CORS headers FIRST
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  
+  // Handle preflight requests
+  if (req.method === 'OPTIONS') {
+    console.log("[transaction] Handling CORS preflight");
+    return res.status(200).end();
+  }
+
   if (req.method !== "POST") {
     console.log("[transaction] ERROR: Method not allowed:", req.method);
     return res.status(405).json({ error: "Method not allowed" });
@@ -33,6 +44,7 @@ module.exports = async function handler(req, res) {
     // Validate frame message
     if (!req.body?.untrustedData?.fid) {
       console.log("[transaction] ERROR: Missing frame data");
+      console.log("[transaction] Request body:", JSON.stringify(req.body, null, 2));
       return res.status(400).json({ error: "Invalid frame request" });
     }
 
@@ -57,10 +69,14 @@ module.exports = async function handler(req, res) {
     const provider = new ethers.providers.JsonRpcProvider(BASE_PROVIDER_URL);
     const minerContract = new ethers.Contract(
       MINER_ADDRESS,
-      ["function getSlot0() external view returns (tuple(uint8 locked, uint16 epochId, uint192 initPrice, uint40 startTime, uint256 dps, address miner, string uri))", "function getPrice() external view returns (uint256)"],
+      [
+        "function getSlot0() external view returns (tuple(uint8 locked, uint16 epochId, uint192 initPrice, uint40 startTime, uint256 dps, address miner, string uri))",
+        "function getPrice() external view returns (uint256)"
+      ],
       provider
     );
 
+    console.log("[transaction] Fetching contract data...");
     const [slot0, currentPrice] = await Promise.all([
       minerContract.getSlot0(),
       minerContract.getPrice()
