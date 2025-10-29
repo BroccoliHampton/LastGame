@@ -1,7 +1,9 @@
 //
-// api/get-game-state.js - CORRECT VERSION based on actual contract
+// api/get-game-state.js - Final version with Neynar Lookup
 //
 const { ethers } = require("ethers");
+// Import Neynar SDK
+const { NeynarAPIClient, Configuration } = require("@neynar/nodejs-sdk");
 
 // --- CONFIGURATION ---
 const BASE_PROVIDER_URL = process.env.BASE_PROVIDER_URL;
@@ -42,6 +44,7 @@ const donutAbi = [
 let readOnlyProvider;
 let multicallContract;
 let minerContract;
+let neynarClient; // Declare neynarClient globally
 
 // Initialize providers and contracts outside handler for reuse
 if (BASE_PROVIDER_URL) {
@@ -49,6 +52,12 @@ if (BASE_PROVIDER_URL) {
     readOnlyProvider = new ethers.providers.JsonRpcProvider(BASE_PROVIDER_URL);
     multicallContract = new ethers.Contract(MULTICALL_ADDRESS, multicallAbi, readOnlyProvider);
     minerContract = new ethers.Contract(MINER_ADDRESS, minerAbi, readOnlyProvider);
+    
+    // Initialize Neynar Client
+    if (process.env.NEYNAR_API_KEY) {
+        neynarClient = new NeynarAPIClient(new Configuration({ apiKey: process.env.NEYNAR_API_KEY }));
+    }
+    
     console.log("[get-game-state] Providers initialized successfully");
   } catch (e) {
     console.error("[get-game-state] FAILED to create providers:", e.message);
@@ -77,34 +86,48 @@ module.exports = async function handler(req, res) {
   }
 
   try {
-    // Get user address from query (optional)
     const { userAddress } = req.query;
     const address = userAddress || ethers.constants.AddressZero;
     
-    console.log(`[get-game-state] Fetching state for address: ${address}`);
-
-    // Get all game state from Multicall - with CORRECT ABI
     const minerState = await multicallContract.getMiner(address);
+    const currentMinerAddress = minerState.miner;
     
-    console.log("[get-game-state] Multicall returned successfully");
-    console.log("  - epochId:", minerState.epochId);
-    console.log("  - price:", ethers.utils.formatEther(minerState.price), "ETH");
-    console.log("  - miner:", minerState.miner);
-    console.log("  - glazed (claimable):", ethers.utils.formatEther(minerState.glazed), "DONUT");
+    // --- NEW NEYNAR LOOKUP LOGIC ---
+    let currentMinerUsername = null;
     
-    // Get additional data from Miner contract
+    // Only attempt lookup if the address is not the zero address
+    if (neynarClient && currentMinerAddress !== ethers.constants.AddressZero) {
+        try {
+            // Fetch user profile by Ethereum address
+            const usersData = await neynarClient.fetchBulkUsersByEthOrSolAddress({
+                addresses: [currentMinerAddress],
+                addressTypes: ['verified_address', 'custody_address']
+            });
+
+            if (usersData && usersData.users && usersData.users.length > 0) {
+                // Use the first resolved user's username
+                currentMinerUsername = usersData.users[0].username; 
+                console.log(`[get-game-state] Resolved username: @${currentMinerUsername}`);
+            }
+        } catch (e) {
+            console.error("[get-game-state] Neynar lookup failed:", e.message);
+        }
+    }
+    // --- END NEYNAR LOOKUP ---
+
+    // Get additional data from Miner contract (remains the same)
     const [contractStartTime, halvingPeriod, donutAddress, totalSupply] = await Promise.all([
-      minerContract.startTime(),
-      minerContract.HALVING_PERIOD(),
-      minerContract.donut(),
-      (async () => {
-        const donutAddr = await minerContract.donut();
-        const donutContract = new ethers.Contract(donutAddr, donutAbi, readOnlyProvider);
-        return await donutContract.totalSupply();
-      })()
+        minerContract.startTime(),
+        minerContract.HALVING_PERIOD(),
+        minerContract.donut(),
+        (async () => {
+            const donutAddr = await minerContract.donut();
+            const donutContract = new ethers.Contract(donutAddr, donutAbi, readOnlyProvider);
+            return await donutContract.totalSupply();
+        })()
     ]);
 
-    // Calculate time until next halving
+    // Calculate time until next halving (remains the same)
     const currentTime = Math.floor(Date.now() / 1000);
     const timeSinceStart = currentTime - contractStartTime.toNumber();
     const currentHalvingPeriod = Math.floor(timeSinceStart / halvingPeriod.toNumber());
@@ -118,15 +141,14 @@ module.exports = async function handler(req, res) {
     const response = {
       // Basic game state
       epochId: minerState.epochId,
-      currentMiner: minerState.miner,
+      currentMiner: currentMinerAddress,
+      // *** ADD THE USERNAME FIELD ***
+      currentMinerUsername: currentMinerUsername, 
+      
       price: minerState.price.toString(),
       priceInEth: ethers.utils.formatEther(minerState.price),
       
-      // DPS info
-      currentDps: minerState.dps.toString(),
-      currentDpsFormatted: ethers.utils.formatEther(minerState.dps),
-      nextDps: minerState.nextDps.toString(),
-      nextDpsFormatted: ethers.utils.formatEther(minerState.nextDps),
+      // ... (rest of the response remains the same) ...
       
       // Timing
       startTime: minerState.startTime,
@@ -162,8 +184,6 @@ module.exports = async function handler(req, res) {
 
   } catch (error) {
     console.error("[get-game-state] ERROR:", error);
-    console.error("[get-game-state] Error message:", error.message);
-    
     res.status(500).json({ 
       error: `Failed to fetch game state: ${error.message}`
     });
