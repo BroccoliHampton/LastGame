@@ -13,7 +13,7 @@ module.exports = async function handler(req, res) {
       version: "1",
       imageUrl: START_IMAGE_URL,
       button: {
-        title: "Play If U Dare",
+        title: "Glaze It!",
         action: {
           type: "launch_frame",
           name: "Last Game",
