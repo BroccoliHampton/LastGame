@@ -1,5 +1,5 @@
 //
-// api/get-game-state.js - Final version with Neynar Lookup
+// api/get-game-state.js - Final version with Neynar Lookup and DPS FIX
 //
 const { ethers } = require("ethers");
 // Import Neynar SDK
@@ -142,13 +142,16 @@ module.exports = async function handler(req, res) {
       // Basic game state
       epochId: minerState.epochId,
       currentMiner: currentMinerAddress,
-      // *** ADD THE USERNAME FIELD ***
       currentMinerUsername: currentMinerUsername, 
       
       price: minerState.price.toString(),
       priceInEth: ethers.utils.formatEther(minerState.price),
       
-      // ... (rest of the response remains the same) ...
+      // *** DPS (Donuts Per Second) - FIXED: Added these fields ***
+      currentDps: minerState.dps.toString(),
+      currentDpsFormatted: ethers.utils.formatEther(minerState.dps),
+      nextDps: minerState.nextDps.toString(),
+      nextDpsFormatted: ethers.utils.formatEther(minerState.nextDps),
       
       // Timing
       startTime: minerState.startTime,
