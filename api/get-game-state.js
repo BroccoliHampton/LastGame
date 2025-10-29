@@ -5,8 +5,10 @@ const { ethers } = require("ethers");
 
 // --- CONFIGURATION ---
 const BASE_PROVIDER_URL = process.env.BASE_PROVIDER_URL;
-const MULTICALL_ADDRESS = '0x88e52940E62E150619cAa54b1bc51b1103a2EA9F';
-const MINER_ADDRESS = '0x3EE441030984ACfeCf17FDa6953bea00a8c53Fa7';
+// !!! NEW MULTICALL ADDRESS !!!
+const MULTICALL_ADDRESS = '0xDbC6028935b3b5b96451C48bD66Eff0918eA59A9';
+// !!! NEW MINER ADDRESS !!!
+const MINER_ADDRESS = '0x9E5eA3b8AdDA08dFb918370811c1496b114DF97e';
 
 // CORRECT ABI - From actual verified contract on BaseScan
 const multicallAbi = [
