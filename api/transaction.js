@@ -1,11 +1,12 @@
 //
-// api/transaction.js - Generates transaction data for mine() function
+// api/transaction.js - FIXED for zero price handling
 //
 const { ethers } = require("ethers");
 
 // --- CONFIGURATION ---
 const MINER_ADDRESS = '0x3EE441030984ACfeCf17FDa6953bea00a8c53Fa7';
 const PROVIDER_ADDRESS = '0x96f71F5ef424D560C9df490B453802C24D2Cd705';
+const MIN_PRICE = ethers.utils.parseEther('0.0001'); // 0.0001 ETH minimum
 
 const minerAbi = [
   `function mine(
@@ -24,7 +25,7 @@ module.exports = async function handler(req, res) {
   console.log("[transaction] /api/transaction called");
   console.log("[transaction] Request method:", req.method);
 
-  // CRITICAL: Add CORS headers FIRST
+  // CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
@@ -83,10 +84,17 @@ module.exports = async function handler(req, res) {
     ]);
 
     const epochId = slot0.epochId;
-    const price = currentPrice;
+    let price = currentPrice;
 
     console.log("[transaction] Current epochId:", epochId);
     console.log("[transaction] Current price:", ethers.utils.formatEther(price), "ETH");
+
+    // CRITICAL FIX: Handle zero or very low prices
+    if (price.isZero() || price.lt(MIN_PRICE)) {
+      console.log("[transaction] Price is zero or too low, using minimum price");
+      price = MIN_PRICE;
+      console.log("[transaction] Using minimum price:", ethers.utils.formatEther(MIN_PRICE), "ETH");
+    }
 
     // Add 10% buffer to maxPrice to account for small price changes
     const maxPrice = price.mul(110).div(100);
@@ -108,10 +116,11 @@ module.exports = async function handler(req, res) {
     ]);
 
     console.log("[transaction] Generated calldata for mine()");
-    console.log("[transaction] Price (ETH):", ethers.utils.formatEther(price));
+    console.log("[transaction] Final Price (ETH):", ethers.utils.formatEther(price));
     console.log("[transaction] Max Price (ETH):", ethers.utils.formatEther(maxPrice));
 
     // Build transaction response for Farcaster frame
+    // CRITICAL: Use hex string for value to ensure wallet compatibility
     const response = {
       chainId: "eip155:8453", // Base mainnet
       method: "eth_sendTransaction",
@@ -119,10 +128,11 @@ module.exports = async function handler(req, res) {
         abi: minerAbi,
         to: MINER_ADDRESS,
         data: calldata,
-        value: price.toString() // Send ETH equal to current price
+        value: price.toHexString() // Hex string format for better wallet compatibility
       }
     };
 
+    console.log("[transaction] Transaction value (hex):", price.toHexString());
     console.log("[transaction] Sending transaction response");
     res.status(200).json(response);
 
