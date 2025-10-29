@@ -25,7 +25,7 @@ export default async function handler(req, res) {
       'function mine(address provider) external payable'
     ];
 
-    // Get current price from blockchain
+    // Get current price from blockchain - using ethers v6 syntax
     const RPC_URL = 'https://mainnet.base.org';
     const providerRpc = new ethers.JsonRpcProvider(RPC_URL);
     const minerContract = new ethers.Contract(MINER_ADDRESS, [
@@ -36,7 +36,7 @@ export default async function handler(req, res) {
     
     console.log('Current price from contract:', price.toString());
 
-    // Encode the transaction data
+    // Encode the transaction data - using ethers v6 syntax
     const iface = new ethers.Interface(MINER_ABI);
     const providerAddress = provider || ethers.ZeroAddress;
     const data = iface.encodeFunctionData('mine', [providerAddress]);
