@@ -51,10 +51,14 @@ if (BASE_PROVIDER_URL) {
   } catch (e) {
     console.error("[get-game-state] FAILED to create providers:", e.message);
   }
+} else {
+  console.error("[get-game-state] BASE_PROVIDER_URL environment variable is not set!");
 }
 
 module.exports = async function handler(req, res) {
   console.log("[get-game-state] API called");
+  console.log("[get-game-state] Method:", req.method);
+  console.log("[get-game-state] Query:", req.query);
   
   // CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -62,16 +66,30 @@ module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   
   if (req.method === 'OPTIONS') {
+    console.log("[get-game-state] Handling OPTIONS preflight");
     return res.status(200).end();
   }
   
   if (req.method !== 'GET') {
+    console.log("[get-game-state] Method not allowed:", req.method);
     return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  // Check if environment variable is set
+  if (!BASE_PROVIDER_URL) {
+    console.error("[get-game-state] BASE_PROVIDER_URL not configured");
+    return res.status(500).json({ 
+      error: "Server configuration error: BASE_PROVIDER_URL not set",
+      details: "Please set BASE_PROVIDER_URL environment variable in Vercel"
+    });
   }
 
   if (!readOnlyProvider || !multicallContract || !minerContract) {
     console.error("[get-game-state] Contracts not initialized");
-    return res.status(500).json({ error: "Server configuration error" });
+    return res.status(500).json({ 
+      error: "Server configuration error: Contracts not initialized",
+      providerUrl: BASE_PROVIDER_URL ? "Set" : "Not set"
+    });
   }
 
   try {
@@ -81,10 +99,18 @@ module.exports = async function handler(req, res) {
     
     console.log(`[get-game-state] Fetching state for address: ${address}`);
 
-    // Get all game state from Multicall
-    const minerState = await multicallContract.getMiner(address);
+    // Get all game state from Multicall with timeout
+    console.log("[get-game-state] Calling multicallContract.getMiner()...");
+    const minerState = await Promise.race([
+      multicallContract.getMiner(address),
+      new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Multicall timeout after 10s')), 10000)
+      )
+    ]);
+    console.log("[get-game-state] Multicall response received");
     
     // Get additional data from Miner contract
+    console.log("[get-game-state] Fetching additional contract data...");
     const [contractStartTime, halvingPeriod, donutAddress, totalSupply] = await Promise.all([
       minerContract.startTime(),
       minerContract.HALVING_PERIOD(),
@@ -95,6 +121,7 @@ module.exports = async function handler(req, res) {
         return await donutContract.totalSupply();
       })()
     ]);
+    console.log("[get-game-state] Additional data fetched");
 
     // Calculate time until next halving
     const currentTime = Math.floor(Date.now() / 1000);
@@ -104,7 +131,7 @@ module.exports = async function handler(req, res) {
     const secondsUntilHalving = Math.max(0, nextHalvingTime - currentTime);
 
     // Calculate claimable donuts for current miner
-    const timeAsMiner = currentTime - minerState.startTime;
+    const timeAsMiner = Math.max(0, currentTime - minerState.startTime);
     const claimableDonuts = ethers.BigNumber.from(timeAsMiner).mul(minerState.dps);
 
     // Format response
@@ -151,10 +178,22 @@ module.exports = async function handler(req, res) {
     };
 
     console.log("[get-game-state] State fetched successfully");
+    console.log("[get-game-state] Current miner:", minerState.miner);
+    console.log("[get-game-state] Price (ETH):", ethers.utils.formatEther(minerState.price));
+    
     res.status(200).json(response);
 
   } catch (error) {
-    console.error("[get-game-state] Error:", error.message);
-    res.status(500).json({ error: `Failed to fetch game state: ${error.message}` });
+    console.error("[get-game-state] ERROR:", error);
+    console.error("[get-game-state] Error message:", error.message);
+    console.error("[get-game-state] Error stack:", error.stack);
+    
+    res.status(500).json({ 
+      error: `Failed to fetch game state: ${error.message}`,
+      details: error.stack,
+      providerConfigured: !!BASE_PROVIDER_URL,
+      multicallAddress: MULTICALL_ADDRESS,
+      minerAddress: MINER_ADDRESS
+    });
   }
 };
