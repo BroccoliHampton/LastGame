@@ -18,29 +18,33 @@ export default async function handler(req, res) {
     }
 
     // --- CONFIGURATION ---
-    const MINER_ADDRESS = '0x3EE441030984ACfeCf17FDa6953bea00a8c53Fa7';
+    // !!! NEW MINER ADDRESS !!!
+    const MINER_ADDRESS = '0x9E5eA3b8AdDA08dFb918370811c1496b114DF97e'; 
     const RPC_URL = 'https://mainnet.base.org';
     const REFERRAL_PROVIDER_ADDRESS = process.env.YOUR_WALLET_ADDRESS; // Your Vercel ENV var
 
     if (!REFERRAL_PROVIDER_ADDRESS || !ethers.utils.isAddress(REFERRAL_PROVIDER_ADDRESS)) {
         console.error('Missing or invalid YOUR_WALLET_ADDRESS environment variable.');
         // Fallback to AddressZero if ENV is missing (if the contract allows it)
+        // NOTE: Ensure your contract allows address(0) if the ENV is not set.
         const providerAddress = ethers.constants.AddressZero;
         console.log('Falling back to AddressZero for provider.');
     }
     const providerAddress = REFERRAL_PROVIDER_ADDRESS;
     // --- END CONFIGURATION ---
 
-    // --- 1. CORRECTED MINER ABI ---
+    // --- 1. CORRECTED MINER ABI (5 parameters) ---
     const MINER_ABI = [
-      'function mine(address miner, address provider, uint256 epochId, uint256 deadline, uint256 maxPrice, string memory uri) external payable'
+      'function mine(address provider, uint256 epochId, uint256 deadline, uint256 maxPrice, string memory uri) external payable'
     ];
     
+    // We still need the read-only functions
     const slot0Abi = ['function getSlot0() external view returns (tuple(uint8 locked, uint16 epochId, uint192 initPrice, uint40 startTime, uint256 dps, address miner, string uri))'];
+    const priceAbi = ['function getPrice() external view returns (uint256)'];
     
     // Setup Ethers
     const providerRpc = new ethers.providers.JsonRpcProvider(RPC_URL);
-    const minerContract = new ethers.Contract(MINER_ADDRESS, MINER_ABI.concat(['function getPrice() external view returns (uint256)']).concat(slot0Abi), providerRpc);
+    const minerContract = new ethers.Contract(MINER_ADDRESS, MINER_ABI.concat(priceAbi).concat(slot0Abi), providerRpc);
 
     // --- 2. FETCH PRICE & SLOT0 ---
     const [price, slot0] = await Promise.all([
@@ -50,16 +54,15 @@ export default async function handler(req, res) {
     
     console.log('Current price from contract:', price.toString());
 
-    // --- 3. CALCULATE TRANSACTION PARAMETERS ---
+    // --- 3. CALCULATE TRANSACTION PARAMETERS (5 parameters) ---
     const currentTime = Math.floor(Date.now() / 1000);
 
     const params = [
-        player,                             // 1. miner: The user's address (new miner)
-        providerAddress,                    // 2. provider: Your referral address
-        slot0.epochId,                      // 3. epochId: Current epoch ID
-        currentTime + 300,                  // 4. deadline: 5 minutes from now
-        price,                              // 5. maxPrice: Current price (no slippage allowed)
-        "Donut Miner on Farcaster"          // 6. uri: The URI string
+        providerAddress,                    // 1. provider: Your referral address
+        slot0.epochId,                      // 2. epochId: Current epoch ID
+        currentTime + 300,                  // 3. deadline: 5 minutes from now
+        price,                              // 4. maxPrice: Current price (no slippage allowed)
+        "Donut Miner on Farcaster"          // 5. uri: The URI string
     ];
 
     // --- 4. ENCODE FUNCTION DATA ---
