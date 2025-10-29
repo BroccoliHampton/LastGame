@@ -25,9 +25,9 @@ export default async function handler(req, res) {
       'function mine(address provider) external payable'
     ];
 
-    // Get current price from blockchain - using ethers v6 syntax
+    // Get current price from blockchain - using ethers v5 syntax
     const RPC_URL = 'https://mainnet.base.org';
-    const providerRpc = new ethers.JsonRpcProvider(RPC_URL);
+    const providerRpc = new ethers.providers.JsonRpcProvider(RPC_URL);
     const minerContract = new ethers.Contract(MINER_ADDRESS, [
       'function getPrice() external view returns (uint256)'
     ], providerRpc);
@@ -36,13 +36,13 @@ export default async function handler(req, res) {
     
     console.log('Current price from contract:', price.toString());
 
-    // Encode the transaction data - using ethers v6 syntax
-    const iface = new ethers.Interface(MINER_ABI);
-    const providerAddress = provider || ethers.ZeroAddress;
+    // Encode the transaction data - using ethers v5 syntax
+    const iface = new ethers.utils.Interface(MINER_ABI);
+    const providerAddress = provider || ethers.constants.AddressZero;
     const data = iface.encodeFunctionData('mine', [providerAddress]);
 
     // CRITICAL FIX: Convert price to hex format properly
-    const valueInHex = '0x' + price.toString(16);
+    const valueInHex = '0x' + price.toBigInt().toString(16);
     
     console.log('Price in wei:', price.toString());
     console.log('Price in hex:', valueInHex);
