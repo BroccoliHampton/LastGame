@@ -17,47 +17,53 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Player address required' });
     }
 
-    // --- CONFIGURATION ---
-    // !!! NEW MINER ADDRESS !!!
-    const MINER_ADDRESS = '0x9E5eA3b8AdDA08dFb918370811c1496b114DF97e'; 
+    // --- CONFIGURATION: NEW CONTRACT ADDRESSES ---
+    // New Miner Address
+    const MINER_ADDRESS = '0x9Bea9c75063095ba8C6bF60F6B50858B140bF869'; 
+    // New Multicall Address
+    const MULTICALL_ADDRESS = '0x0d6fC0Cf23F0B78B1280c4037cA9B47F13Ca19e4'; 
+    
     const RPC_URL = 'https://mainnet.base.org';
-    const REFERRAL_PROVIDER_ADDRESS = process.env.YOUR_WALLET_ADDRESS; // Your Vercel ENV var
+    const REFERRAL_PROVIDER_ADDRESS = process.env.YOUR_WALLET_ADDRESS;
 
     if (!REFERRAL_PROVIDER_ADDRESS || !ethers.utils.isAddress(REFERRAL_PROVIDER_ADDRESS)) {
-        console.error('Missing or invalid YOUR_WALLET_ADDRESS environment variable.');
-        // Fallback to AddressZero if ENV is missing (if the contract allows it)
-        // NOTE: Ensure your contract allows address(0) if the ENV is not set.
+        console.error('Missing or invalid YOUR_WALLET_ADDRESS environment variable. Falling back to AddressZero.');
         const providerAddress = ethers.constants.AddressZero;
-        console.log('Falling back to AddressZero for provider.');
     }
-    const providerAddress = REFERRAL_PROVIDER_ADDRESS;
+    const providerAddress = REFERRAL_PROVIDER_ADDRESS || ethers.constants.AddressZero;
     // --- END CONFIGURATION ---
 
-    // --- 1. CORRECTED MINER ABI (5 parameters) ---
+    // --- ABIs ---
+    // Miner ABI (to encode the inner call)
     const MINER_ABI = [
       'function mine(address provider, uint256 epochId, uint256 deadline, uint256 maxPrice, string memory uri) external payable'
     ];
+    // Multicall ABI (to encode the wrapper call)
+    const MULTICALL_ABI = [
+      'function multicall(tuple(address target, uint256 value, bytes callData)[] calls) external payable returns (bytes[] memory results)'
+    ];
     
-    // We still need the read-only functions
+    // Read-only ABIs for fetching parameters
     const slot0Abi = ['function getSlot0() external view returns (tuple(uint8 locked, uint16 epochId, uint192 initPrice, uint40 startTime, uint256 dps, address miner, string uri))'];
     const priceAbi = ['function getPrice() external view returns (uint256)'];
     
-    // Setup Ethers
+    // Setup Ethers for read-only calls
     const providerRpc = new ethers.providers.JsonRpcProvider(RPC_URL);
-    const minerContract = new ethers.Contract(MINER_ADDRESS, MINER_ABI.concat(priceAbi).concat(slot0Abi), providerRpc);
+    // Use the read-only contract for fetching price/slot0
+    const readOnlyMinerContract = new ethers.Contract(MINER_ADDRESS, MINER_ABI.concat(priceAbi).concat(slot0Abi), providerRpc);
 
     // --- 2. FETCH PRICE & SLOT0 ---
     const [price, slot0] = await Promise.all([
-        minerContract.getPrice(),
-        minerContract.getSlot0(),
+        readOnlyMinerContract.getPrice(),
+        readOnlyMinerContract.getSlot0(),
     ]);
     
     console.log('Current price from contract:', price.toString());
 
-    // --- 3. CALCULATE TRANSACTION PARAMETERS (5 parameters) ---
+    // --- 3. CALCULATE TRANSACTION PARAMETERS (5 parameters for mine) ---
     const currentTime = Math.floor(Date.now() / 1000);
 
-    const params = [
+    const mineParams = [
         providerAddress,                    // 1. provider: Your referral address
         slot0.epochId,                      // 2. epochId: Current epoch ID
         currentTime + 300,                  // 3. deadline: 5 minutes from now
@@ -65,25 +71,38 @@ export default async function handler(req, res) {
         "Donut Miner on Farcaster"          // 5. uri: The URI string
     ];
 
-    // --- 4. ENCODE FUNCTION DATA ---
-    const iface = new ethers.utils.Interface(MINER_ABI);
-    const data = iface.encodeFunctionData('mine', params);
+    // --- 4. ENCODE MINER.mine() CALL DATA ---
+    const mineIface = new ethers.utils.Interface(MINER_ABI);
+    const mineCallData = mineIface.encodeFunctionData('mine', mineParams);
 
-    // Convert price to hex format properly
-    const valueInHex = '0x' + price.toBigInt().toString(16);
+    // --- 5. ENCODE MULTICALL.multicall() WRAPPER DATA ---
     
-    console.log('Price in wei:', price.toString());
-    console.log('Price in hex:', valueInHex);
+    // The call to mine()
+    const calls = [{
+      target: MINER_ADDRESS,
+      value: price, // The ETH value to be forwarded to the Miner contract
+      callData: mineCallData,
+    }];
 
-    // Return transaction params
+    // Create the interface for the Multicall contract
+    const multicallIface = new ethers.utils.Interface(MULTICALL_ABI);
+    const multicallData = multicallIface.encodeFunctionData('multicall', [calls]);
+
+    // The total value sent to Multicall is the sum of all 'value' fields in the calls array (just 'price' here)
+    const totalValueInHex = '0x' + price.toBigInt().toString(16);
+    
+    console.log('Total Price in wei:', price.toString());
+    console.log('Total Price in hex:', totalValueInHex);
+
+    // Return final transaction parameters
     const txData = {
       chainId: 'eip155:8453', // Base chain ID
       method: 'eth_sendTransaction',
       params: {
-        abi: MINER_ABI,
-        to: MINER_ADDRESS,
-        data: data,
-        value: valueInHex,
+        abi: MULTICALL_ABI, // IMPORTANT: Use Multicall ABI
+        to: MULTICALL_ADDRESS, // IMPORTANT: Target Multicall contract
+        data: multicallData, // Send the multicall-encoded data
+        value: totalValueInHex, // Send the total ETH value
       }
     };
 
