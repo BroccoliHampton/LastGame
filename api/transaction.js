@@ -17,9 +17,9 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Player address required' });
     }
 
-    // --- CONFIGURATION ---
-    // !!! NEW MINER ADDRESS !!!
-    const MINER_ADDRESS = '0x9E5eA3b8AdDA08dFb918370811c1496b114DF97e'; 
+    // --- CONFIGURATION - UPDATED FOR NEW CONTRACTS ---
+    const MULTICALL_ADDRESS = '0x0d6fC0Cf23F0B78B1280c4037cA9B47F13Ca19e4'; // NEW!
+    const MINER_ADDRESS = '0x9Bea9c75063095ba8C6bF60F6B50858B140bF869';     // NEW!
     const RPC_URL = 'https://mainnet.base.org';
     const REFERRAL_PROVIDER_ADDRESS = process.env.YOUR_WALLET_ADDRESS; // Your Vercel ENV var
 
@@ -33,40 +33,38 @@ export default async function handler(req, res) {
     const providerAddress = REFERRAL_PROVIDER_ADDRESS;
     // --- END CONFIGURATION ---
 
-    // --- 1. CORRECTED MINER ABI (5 parameters) ---
-    const MINER_ABI = [
-      'function mine(address provider, uint256 epochId, uint256 deadline, uint256 maxPrice, string memory uri) external payable'
+    // --- MULTICALL ABI - mine() function + read functions ---
+    const MULTICALL_ABI = [
+      'function mine(address provider, uint256 epochId, uint256 deadline, uint256 maxPrice, string memory uri) external payable',
+      'function getMiner(address account) external view returns (tuple(uint16 epochId, uint192 initPrice, uint40 startTime, uint256 glazed, uint256 price, uint256 dps, uint256 nextDps, address miner, string uri, uint256 ethBalance, uint256 wethBalance, uint256 donutBalance))'
     ];
-    
-    // We still need the read-only functions
-    const slot0Abi = ['function getSlot0() external view returns (tuple(uint8 locked, uint16 epochId, uint192 initPrice, uint40 startTime, uint256 dps, address miner, string uri))'];
-    const priceAbi = ['function getPrice() external view returns (uint256)'];
     
     // Setup Ethers
     const providerRpc = new ethers.providers.JsonRpcProvider(RPC_URL);
-    const minerContract = new ethers.Contract(MINER_ADDRESS, MINER_ABI.concat(priceAbi).concat(slot0Abi), providerRpc);
+    const multicallContract = new ethers.Contract(MULTICALL_ADDRESS, MULTICALL_ABI, providerRpc);
 
-    // --- 2. FETCH PRICE & SLOT0 ---
-    const [price, slot0] = await Promise.all([
-        minerContract.getPrice(),
-        minerContract.getSlot0(),
-    ]);
+    // --- FETCH PRICE & EPOCH FROM MULTICALL ---
+    // Use getMiner with zero address to get current game state
+    const minerState = await multicallContract.getMiner(ethers.constants.AddressZero);
+    const price = minerState.price;
+    const epochId = minerState.epochId;
     
     console.log('Current price from contract:', price.toString());
+    console.log('Current epoch ID:', epochId);
 
-    // --- 3. CALCULATE TRANSACTION PARAMETERS (5 parameters) ---
+    // --- CALCULATE TRANSACTION PARAMETERS ---
     const currentTime = Math.floor(Date.now() / 1000);
 
     const params = [
         providerAddress,                    // 1. provider: Your referral address
-        slot0.epochId,                      // 2. epochId: Current epoch ID
+        epochId,                            // 2. epochId: Current epoch ID
         currentTime + 300,                  // 3. deadline: 5 minutes from now
         price,                              // 4. maxPrice: Current price (no slippage allowed)
         "Donut Miner on Farcaster"          // 5. uri: The URI string
     ];
 
-    // --- 4. ENCODE FUNCTION DATA ---
-    const iface = new ethers.utils.Interface(MINER_ABI);
+    // --- ENCODE FUNCTION DATA ---
+    const iface = new ethers.utils.Interface(MULTICALL_ABI);
     const data = iface.encodeFunctionData('mine', params);
 
     // Convert price to hex format properly
@@ -75,13 +73,13 @@ export default async function handler(req, res) {
     console.log('Price in wei:', price.toString());
     console.log('Price in hex:', valueInHex);
 
-    // Return transaction params
+    // Return transaction params - NOW POINTING TO MULTICALL
     const txData = {
       chainId: 'eip155:8453', // Base chain ID
       method: 'eth_sendTransaction',
       params: {
-        abi: MINER_ABI,
-        to: MINER_ADDRESS,
+        abi: MULTICALL_ABI,
+        to: MULTICALL_ADDRESS,  // Changed from MINER_ADDRESS to MULTICALL_ADDRESS
         data: data,
         value: valueInHex,
       }
