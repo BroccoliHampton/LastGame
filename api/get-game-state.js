@@ -7,18 +7,30 @@ const { NeynarAPIClient, Configuration } = require("@neynar/nodejs-sdk");
 
 // --- CONFIGURATION ---
 const BASE_PROVIDER_URL = process.env.BASE_PROVIDER_URL;
-// !!! NEW WRAPPER/MULTICALL ADDRESS !!!
-const MULTICALL_ADDRESS = '0x0d6fC0Cf23F0B78B1280c4037cA9B47F13Ca19e4';
-// !!! NEW MINER ADDRESS (used only for miner-specific view functions like HALVING_PERIOD) !!!
-const MINER_ADDRESS = '0x9Bea9c75063095ba8C6bF60F6B50858B140bF869';
+// !!! NEW MULTICALL ADDRESS !!!
+const MULTICALL_ADDRESS = '0xDbC6028935b3b5b96451C48bD66Eff0918eA59A9';
+// !!! NEW MINER ADDRESS !!!
+const MINER_ADDRESS = '0x9E5eA3b8AdDA08dFb918370811c1496b114DF97e';
 
-// CORRECT ABI - This is the complete ABI for the Wrapper/Multicall contract
+// CORRECT ABI - From actual verified contract on BaseScan
 const multicallAbi = [
-  {"inputs":[{"internalType":"address","name":"_miner","type":"address"}],"stateMutability":"nonpayable","type":"constructor"},{"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"previousOwner","type":"address"},{"indexed":true,"internalType":"address","name":"newOwner","type":"address"}],"name":"OwnershipTransferred","type":"event"},{"inputs":[],"name":"donut","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"address","name":"account","type":"address"}],"name":"getMiner","outputs":[{"components":[{"internalType":"uint16","name":"epochId","type":"uint16"},{"internalType":"uint192","name":"initPrice","type":"uint192"},{"internalType":"uint40","name":"startTime","type":"uint40"},{"internalType":"uint256","name":"glazed","type":"uint256"},{"internalType":"uint256","name":"price","type":"uint256"},{"internalType":"uint256","name":"dps","type":"uint256"},{"internalType":"uint256","name":"nextDps","type":"uint256"},{"internalType":"address","name":"miner","type":"address"},{"internalType":"string","name":"uri","type":"string"},{"internalType":"uint256","name":"ethBalance","type":"uint256"},{"internalType":"uint256","name":"wethBalance","type":"uint256"},{"internalType":"uint256","name":"donutBalance","type":"uint256"}],"internalType":"struct Multicall.MinerState","name":"state","type":"tuple"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"address","name":"provider","type":"address"},{"internalType":"uint256","name":"epochId","type":"uint256"},{"internalType":"uint256","name":"deadline","type":"uint256"},{"internalType":"uint256","name":"maxPrice","type":"uint256"},{"internalType":"string","name":"uri","type":"string"}],"name":"mine","outputs":[],"stateMutability":"payable","type":"function"},{"inputs":[],"name":"miner","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"owner","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"quote","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"renounceOwnership","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"address","name":"newOwner","type":"address"}],"name":"transferOwnership","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"address","name":"to","type":"address"}],"name":"withdraw","outputs":[],"stateMutability":"nonpayable","type":"function"}]
+  `function getMiner(address account) external view returns (
+    tuple(
+      uint16 epochId,
+      uint192 initPrice,
+      uint40 startTime,
+      uint256 glazed,
+      uint256 price,
+      uint256 dps,
+      uint256 nextDps,
+      address miner,
+      string uri,
+      uint256 ethBalance,
+      uint256 donutBalance
+    ) state
+  )`
 ];
 
-// NOTE: We still need the Miner's ABI for gettings static values like HALVING_PERIOD
-// NOTE: We use the true Miner address (0x9Bea...) for these static view functions.
 const minerAbi = [
   "function startTime() external view returns (uint256)",
   "function HALVING_PERIOD() external view returns (uint256)",
@@ -32,15 +44,13 @@ const donutAbi = [
 let readOnlyProvider;
 let multicallContract;
 let minerContract;
-let neynarClient;
+let neynarClient; // Declare neynarClient globally
 
 // Initialize providers and contracts outside handler for reuse
 if (BASE_PROVIDER_URL) {
   try {
     readOnlyProvider = new ethers.providers.JsonRpcProvider(BASE_PROVIDER_URL);
-    // Use the Wrapper/Multicall address for state reading
     multicallContract = new ethers.Contract(MULTICALL_ADDRESS, multicallAbi, readOnlyProvider);
-    // Use the true Miner address for static config reading
     minerContract = new ethers.Contract(MINER_ADDRESS, minerAbi, readOnlyProvider);
     
     // Initialize Neynar Client
@@ -79,7 +89,6 @@ module.exports = async function handler(req, res) {
     const { userAddress } = req.query;
     const address = userAddress || ethers.constants.AddressZero;
     
-    // This call is correct, using the new structure
     const minerState = await multicallContract.getMiner(address);
     const currentMinerAddress = minerState.miner;
     
@@ -112,7 +121,6 @@ module.exports = async function handler(req, res) {
         minerContract.HALVING_PERIOD(),
         minerContract.donut(),
         (async () => {
-            // NOTE: We rely on minerContract.donut() which points to the Donut contract
             const donutAddr = await minerContract.donut();
             const donutContract = new ethers.Contract(donutAddr, donutAbi, readOnlyProvider);
             return await donutContract.totalSupply();
