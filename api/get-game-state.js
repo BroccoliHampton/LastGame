@@ -1,18 +1,16 @@
 //
-// api/get-game-state.js - Final version with Neynar Lookup and DPS FIX
+// api/get-game-state.js - Updated with new contract addresses
 //
 const { ethers } = require("ethers");
 // Import Neynar SDK
 const { NeynarAPIClient, Configuration } = require("@neynar/nodejs-sdk");
 
-// --- CONFIGURATION ---
+// --- CONFIGURATION - UPDATED ADDRESSES ---
 const BASE_PROVIDER_URL = process.env.BASE_PROVIDER_URL;
-// !!! NEW MULTICALL ADDRESS !!!
-const MULTICALL_ADDRESS = '0xDbC6028935b3b5b96451C48bD66Eff0918eA59A9';
-// !!! NEW MINER ADDRESS !!!
-const MINER_ADDRESS = '0x9E5eA3b8AdDA08dFb918370811c1496b114DF97e';
+const MULTICALL_ADDRESS = '0x0d6fC0Cf23F0B78B1280c4037cA9B47F13Ca19e4'; // NEW!
+const MINER_ADDRESS = '0x9Bea9c75063095ba8C6bF60F6B50858B140bF869';     // NEW!
 
-// CORRECT ABI - From actual verified contract on BaseScan
+// Multicall ABI - Updated to match the new contract's MinerState struct
 const multicallAbi = [
   `function getMiner(address account) external view returns (
     tuple(
@@ -26,6 +24,7 @@ const multicallAbi = [
       address miner,
       string uri,
       uint256 ethBalance,
+      uint256 wethBalance,
       uint256 donutBalance
     ) state
   )`
@@ -92,7 +91,7 @@ module.exports = async function handler(req, res) {
     const minerState = await multicallContract.getMiner(address);
     const currentMinerAddress = minerState.miner;
     
-    // --- NEW NEYNAR LOOKUP LOGIC ---
+    // --- NEYNAR LOOKUP LOGIC ---
     let currentMinerUsername = null;
     
     // Only attempt lookup if the address is not the zero address
@@ -115,7 +114,7 @@ module.exports = async function handler(req, res) {
     }
     // --- END NEYNAR LOOKUP ---
 
-    // Get additional data from Miner contract (remains the same)
+    // Get additional data from Miner contract
     const [contractStartTime, halvingPeriod, donutAddress, totalSupply] = await Promise.all([
         minerContract.startTime(),
         minerContract.HALVING_PERIOD(),
@@ -127,7 +126,7 @@ module.exports = async function handler(req, res) {
         })()
     ]);
 
-    // Calculate time until next halving (remains the same)
+    // Calculate time until next halving
     const currentTime = Math.floor(Date.now() / 1000);
     const timeSinceStart = currentTime - contractStartTime.toNumber();
     const currentHalvingPeriod = Math.floor(timeSinceStart / halvingPeriod.toNumber());
@@ -147,7 +146,7 @@ module.exports = async function handler(req, res) {
       price: minerState.price.toString(),
       priceInEth: ethers.utils.formatEther(minerState.price),
       
-      // *** DPS (Donuts Per Second) - FIXED: Added these fields ***
+      // DPS (Donuts Per Second)
       currentDps: minerState.dps.toString(),
       currentDpsFormatted: ethers.utils.formatEther(minerState.dps),
       nextDps: minerState.nextDps.toString(),
@@ -166,6 +165,10 @@ module.exports = async function handler(req, res) {
       userDonutBalance: minerState.donutBalance.toString(),
       userDonutBalanceFormatted: ethers.utils.formatEther(minerState.donutBalance),
       
+      // NOTE: New contract has wethBalance field
+      userWethBalance: minerState.wethBalance.toString(),
+      userWethBalanceFormatted: ethers.utils.formatEther(minerState.wethBalance),
+      
       // Claimable (already calculated by contract as "glazed")
       claimableDonuts: minerState.glazed.toString(),
       claimableDonutsFormatted: ethers.utils.formatEther(minerState.glazed),
@@ -176,6 +179,7 @@ module.exports = async function handler(req, res) {
       
       // Contract addresses
       minerContract: MINER_ADDRESS,
+      multicallContract: MULTICALL_ADDRESS,
       donutContract: donutAddress,
       
       // URI
