@@ -27,13 +27,13 @@ module.exports = async function handler(req, res) {
     }
 
     // --- CONFIGURATION ---
-    const MULTICALL_ADDRESS = '0xe03a89eb8b75d73Caf762a81dA260106fD42F18A';
+    const MULTICALL_ADDRESS = '0x3eE553912ba4262Ddd955DD5F910bA0844B16278';
     const RPC_URL = 'https://mainnet.base.org';
 
     // --- MULTICALL ABI - buy() function + read functions ---
     const MULTICALL_ABI = [
       'function buy(uint256 epochId, uint256 deadline, uint256 maxPaymentTokenAmount) external',
-      'function getAuction(address account) external view returns (tuple(uint16 epochId, uint192 initPrice, uint40 startTime, address paymentToken, uint256 price, uint256 paymentTokenPrice, uint256 wethAccumulated, uint256 wethBalance, uint256 paymentTokenBalance))'
+      'function getAuction(address account) external view returns (tuple(uint16 epochId, uint192 initPrice, uint40 startTime, address paymentToken, uint256 price, uint256 paymentTokenPrice, uint256 wethAcummulated, uint256 wethBalance, uint256 paymentTokenBalance))'
     ];
     
     // Setup Ethers
