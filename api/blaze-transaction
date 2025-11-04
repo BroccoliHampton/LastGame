@@ -1,0 +1,99 @@
+import { ethers } from 'ethers';
+
+export default async function handler(req, res) {
+  // CORS headers
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+
+  try {
+    // Farcaster frames send data in the POST body
+    let player;
+    
+    if (req.method === 'POST' && req.body && req.body.untrustedData) {
+      // Extract player address from Farcaster frame POST
+      player = req.body.untrustedData.address;
+    } else {
+      // Fallback to query params for testing
+      player = req.query.player;
+    }
+
+    if (!player) {
+      return res.status(400).json({ error: 'Player address required' });
+    }
+
+    // --- CONFIGURATION ---
+    const MULTICALL_ADDRESS = '0x3eE553912ba4262Ddd955DD5F910bA0844B16278'; // NEW!
+    const RPC_URL = 'https://mainnet.base.org';
+
+    // --- MULTICALL ABI - blaze() function + read functions ---
+    const MULTICALL_ABI = [
+      'function blaze(uint256 amount, uint256 epochId, uint256 deadline, uint256 minWeth) external',
+      'function getBlazer(address account) external view returns (tuple(uint16 epochId, uint192 initPrice, uint40 startTime, address paymentToken, uint256 price, uint256 paymentTokenPrice, uint256 wethAccumulated, uint256 wethBalance, uint256 paymentTokenBalance))'
+    ];
+    
+    // Setup Ethers
+    const providerRpc = new ethers.providers.JsonRpcProvider(RPC_URL);
+    const multicallContract = new ethers.Contract(MULTICALL_ADDRESS, MULTICALL_ABI, providerRpc);
+
+    // --- FETCH AUCTION STATE FROM MULTICALL ---
+    const blazerState = await multicallContract.getBlazer(player);
+    const epochId = blazerState.epochId;
+    const wethBalance = blazerState.wethBalance;
+    const lpPrice = blazerState.price; // LP tokens needed for 1 auction unit
+    
+    console.log('Current epoch ID:', epochId);
+    console.log('WETH available:', ethers.utils.formatEther(wethBalance));
+    console.log('LP price:', ethers.utils.formatEther(lpPrice));
+
+    // --- CALCULATE TRANSACTION PARAMETERS ---
+    const currentTime = Math.floor(Date.now() / 1000);
+    
+    // Use the exact LP price from contract
+    const lpAmountWei = lpPrice;
+    
+    // Calculate expected WETH output with 5% slippage tolerance
+    const minWethOut = wethBalance.mul(95).div(100);
+
+    const params = [
+        lpAmountWei,                        // 1. amount: LP tokens to spend
+        epochId,                            // 2. epochId: Current epoch ID
+        currentTime + 300,                  // 3. deadline: 5 minutes from now
+        minWethOut                          // 4. minWeth: Minimum WETH to receive (slippage protection)
+    ];
+
+    // --- ENCODE FUNCTION DATA ---
+    const iface = new ethers.utils.Interface(MULTICALL_ABI);
+    const data = iface.encodeFunctionData('blaze', params);
+
+    console.log('LP Amount in wei:', lpAmountWei.toString());
+    console.log('Min WETH out:', ethers.utils.formatEther(minWethOut));
+
+    // Return transaction params - NO ETH VALUE NEEDED (it's an LP token swap)
+    const txData = {
+      chainId: 'eip155:8453', // Base chain ID
+      method: 'eth_sendTransaction',
+      params: {
+        abi: MULTICALL_ABI,
+        to: MULTICALL_ADDRESS,
+        data: data,
+        value: '0x0' // No ETH payment needed for blaze
+      }
+    };
+
+    console.log('Returning blaze transaction data:', JSON.stringify(txData, null, 2));
+
+    return res.status(200).json(txData);
+
+  } catch (error) {
+    console.error('Blaze Transaction API Error:', error);
+    return res.status(500).json({ 
+      error: 'Failed to create blaze transaction',
+      details: error.message 
+    });
+  }
+}
