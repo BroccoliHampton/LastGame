@@ -5,7 +5,7 @@ const { ethers } = require("ethers");
 
 // --- CONFIGURATION - UPDATED ADDRESSES ---
 const BASE_PROVIDER_URL = process.env.BASE_PROVIDER_URL; 
-const MULTICALL_ADDRESS = '0xe03a89eb8b75d73Caf762a81dA260106fD42F18A'; // NEW!
+const MULTICALL_ADDRESS = '0xe03a89eb8b75d73Caf762a81dA260106fD42F18A'; // <- NEW ADDRESS
 const DONUT_ADDRESS = '0x9E6702D8DEad349062945093f1c8a945CA111E73';     // NEW!
 
 const multicallAbi = [
