@@ -32,8 +32,8 @@ export default async function handler(req, res) {
 
     // --- MULTICALL ABI - blaze() function + read functions ---
     const MULTICALL_ABI = [
-      'function blaze(uint256 amount, uint256 epochId, uint256 deadline, uint256 minWeth) external',
-      'function getBlazer(address account) external view returns (tuple(uint16 epochId, uint192 initPrice, uint40 startTime, address paymentToken, uint256 price, uint256 paymentTokenPrice, uint256 wethAccumulated, uint256 wethBalance, uint256 paymentTokenBalance))'
+      'function buy(uint256 epochId, uint256 deadline, uint256 maxPaymentTokenAmount) external',
+      'function getAuction(address account) external view returns (tuple(uint16 epochId, uint192 initPrice, uint40 startTime, address paymentToken, uint256 price, uint256 paymentTokenPrice, uint256 wethAcummulated, uint256 wethBalance, uint256 paymentTokenBalance))'
     ];
     
     // Setup Ethers
@@ -41,10 +41,11 @@ export default async function handler(req, res) {
     const multicallContract = new ethers.Contract(MULTICALL_ADDRESS, MULTICALL_ABI, providerRpc);
 
     // --- FETCH AUCTION STATE FROM MULTICALL ---
-    const blazerState = await multicallContract.getBlazer(player);
-    const epochId = blazerState.epochId;
-    const wethBalance = blazerState.wethBalance;
-    const lpPrice = blazerState.price; // LP tokens needed for 1 auction unit
+    // CORRECTED: Using getAuction instead of getBlazer
+    const auctionState = await multicallContract.getAuction(player);
+    const epochId = auctionState.epochId;
+    const wethBalance = auctionState.wethBalance;
+    const lpPrice = auctionState.price; // LP tokens needed
     
     console.log('Current epoch ID:', epochId);
     console.log('WETH available:', ethers.utils.formatEther(wethBalance));
@@ -60,17 +61,17 @@ export default async function handler(req, res) {
     const minWethOut = wethBalance.mul(95).div(100);
 
     const params = [
-        lpAmountWei,                        // 1. amount: LP tokens to spend
-        epochId,                            // 2. epochId: Current epoch ID
-        currentTime + 300,                  // 3. deadline: 5 minutes from now
-        minWethOut                          // 4. minWeth: Minimum WETH to receive (slippage protection)
+        epochId,                            // 1. epochId: Current epoch ID
+        currentTime + 300,                  // 2. deadline: 5 minutes from now
+        lpAmountWei                         // 3. maxPaymentTokenAmount: Maximum LP tokens to spend
     ];
 
     // --- ENCODE FUNCTION DATA ---
     const iface = new ethers.utils.Interface(MULTICALL_ABI);
-    const data = iface.encodeFunctionData('blaze', params);
+    const data = iface.encodeFunctionData('buy', params);
 
-    console.log('LP Amount in wei:', lpAmountWei.toString());
+    console.log('Epoch ID:', epochId);
+    console.log('Max LP Amount:', ethers.utils.formatEther(lpAmountWei));
     console.log('Min WETH out:', ethers.utils.formatEther(minWethOut));
 
     // Return transaction params - NO ETH VALUE NEEDED (it's an LP token swap)
@@ -81,18 +82,18 @@ export default async function handler(req, res) {
         abi: MULTICALL_ABI,
         to: MULTICALL_ADDRESS,
         data: data,
-        value: '0x0' // No ETH payment needed for blaze
+        value: '0x0' // No ETH payment needed for buy
       }
     };
 
-    console.log('Returning blaze transaction data:', JSON.stringify(txData, null, 2));
+    console.log('Returning buy transaction data:', JSON.stringify(txData, null, 2));
 
     return res.status(200).json(txData);
 
   } catch (error) {
-    console.error('Blaze Transaction API Error:', error);
+    console.error('Buy Transaction API Error:', error);
     return res.status(500).json({ 
-      error: 'Failed to create blaze transaction',
+      error: 'Failed to create buy transaction',
       details: error.message 
     });
   }
