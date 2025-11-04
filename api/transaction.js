@@ -55,15 +55,15 @@ export default async function handler(req, res) {
     // --- CALCULATE TRANSACTION PARAMETERS ---
     const currentTime = Math.floor(Date.now() / 1000);
     
-    // Use the greater of: (previous start time + 1) or (current time + 1)
-    // This ensures the new start time is strictly greater than the previous one
+    // The contract requires the new start time to be strictly greater than the previous one
+    // Add a 2-second buffer to account for network delays and ensure it's always valid
     const previousStartTime = minerState.startTime;
-    const newStartTime = Math.max(previousStartTime + 1, currentTime + 1);
+    const minimumStartTime = Math.max(previousStartTime + 2, currentTime + 2);
 
     const params = [
         providerAddress,                    // 1. provider: Your referral address
         epochId,                            // 2. epochId: Current epoch ID
-        newStartTime,                       // 3. deadline: Must be > previous start time
+        minimumStartTime,                   // 3. deadline: Guaranteed to be > previous start time
         price,                              // 4. maxPrice: Current price (no slippage allowed)
         "Donut Miner on Farcaster"          // 5. uri: The URI string
     ];
