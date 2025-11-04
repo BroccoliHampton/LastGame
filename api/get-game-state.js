@@ -1,5 +1,5 @@
 //
-// api/get-game-state.js - Updated with new contract addresses
+// api/get-game-state.js - Updated with Blaze/AuctionState support
 //
 const { ethers } = require("ethers");
 // Import Neynar SDK
@@ -7,10 +7,10 @@ const { NeynarAPIClient, Configuration } = require("@neynar/nodejs-sdk");
 
 // --- CONFIGURATION - UPDATED ADDRESSES ---
 const BASE_PROVIDER_URL = process.env.BASE_PROVIDER_URL;
-const MULTICALL_ADDRESS = '0x0d6fC0Cf23F0B78B1280c4037cA9B47F13Ca19e4'; // NEW!
-const MINER_ADDRESS = '0x9Bea9c75063095ba8C6bF60F6B50858B140bF869';     // NEW!
+const MULTICALL_ADDRESS = '0x3eE553912ba4262Ddd955DD5F910bA0844B16278'; // NEW!
+const MINER_ADDRESS = '0x9Bea9c75063095ba8C6bF60F6B50858B140bF869';
 
-// Multicall ABI - Updated to match the new contract's MinerState struct
+// Multicall ABI - Updated to include Blaze auction state
 const multicallAbi = [
   `function getMiner(address account) external view returns (
     tuple(
@@ -27,6 +27,20 @@ const multicallAbi = [
       uint256 wethBalance,
       uint256 donutBalance
     ) state
+  )`,
+  // NEW: Add auction state function
+  `function getBlazer(address account) external view returns (
+    tuple(
+      uint16 epochId,
+      uint192 initPrice,
+      uint40 startTime,
+      address paymentToken,
+      uint256 price,
+      uint256 paymentTokenPrice,
+      uint256 wethAccumulated,
+      uint256 wethBalance,
+      uint256 paymentTokenBalance
+    ) state
   )`
 ];
 
@@ -38,6 +52,11 @@ const minerAbi = [
 
 const donutAbi = [
   "function totalSupply() external view returns (uint256)"
+];
+
+// NEW: ERC20 ABI for LP token balance
+const erc20Abi = [
+  "function balanceOf(address account) external view returns (uint256)"
 ];
 
 let readOnlyProvider;
@@ -88,7 +107,12 @@ module.exports = async function handler(req, res) {
     const { userAddress } = req.query;
     const address = userAddress || ethers.constants.AddressZero;
     
-    const minerState = await multicallContract.getMiner(address);
+    // Fetch BOTH miner state and blazer state
+    const [minerState, blazerState] = await Promise.all([
+      multicallContract.getMiner(address),
+      multicallContract.getBlazer(address)
+    ]);
+    
     const currentMinerAddress = minerState.miner;
     
     // --- NEYNAR LOOKUP LOGIC ---
@@ -126,6 +150,20 @@ module.exports = async function handler(req, res) {
         })()
     ]);
 
+    // NEW: Get user's LP token balance if address is provided
+    let userLpBalance = "0";
+    let userLpBalanceFormatted = "0.0";
+    if (address !== ethers.constants.AddressZero && blazerState.paymentToken !== ethers.constants.AddressZero) {
+        try {
+            const lpTokenContract = new ethers.Contract(blazerState.paymentToken, erc20Abi, readOnlyProvider);
+            const balance = await lpTokenContract.balanceOf(address);
+            userLpBalance = balance.toString();
+            userLpBalanceFormatted = ethers.utils.formatEther(balance);
+        } catch (e) {
+            console.error("[get-game-state] Failed to fetch LP balance:", e.message);
+        }
+    }
+
     // Calculate time until next halving
     const currentTime = Math.floor(Date.now() / 1000);
     const timeSinceStart = currentTime - contractStartTime.toNumber();
@@ -138,6 +176,7 @@ module.exports = async function handler(req, res) {
 
     // Format response
     const response = {
+      // ========== GLAZERY STATE ==========
       // Basic game state
       epochId: minerState.epochId,
       currentMiner: currentMinerAddress,
@@ -165,7 +204,6 @@ module.exports = async function handler(req, res) {
       userDonutBalance: minerState.donutBalance.toString(),
       userDonutBalanceFormatted: ethers.utils.formatEther(minerState.donutBalance),
       
-      // NOTE: New contract has wethBalance field
       userWethBalance: minerState.wethBalance.toString(),
       userWethBalanceFormatted: ethers.utils.formatEther(minerState.wethBalance),
       
@@ -177,13 +215,43 @@ module.exports = async function handler(req, res) {
       totalDonutSupply: totalSupply.toString(),
       totalDonutSupplyFormatted: ethers.utils.formatEther(totalSupply),
       
+      // URI
+      uri: minerState.uri,
+
+      // ========== BLAZERY STATE (NEW) ==========
+      blaze: {
+        epochId: blazerState.epochId,
+        initPrice: blazerState.initPrice.toString(),
+        startTime: blazerState.startTime,
+        paymentToken: blazerState.paymentToken,
+        
+        // Current auction price (in LP tokens)
+        price: blazerState.price.toString(),
+        priceFormatted: ethers.utils.formatEther(blazerState.price),
+        
+        // LP token price (probably in WETH/USD)
+        paymentTokenPrice: blazerState.paymentTokenPrice.toString(),
+        paymentTokenPriceFormatted: ethers.utils.formatEther(blazerState.paymentTokenPrice),
+        
+        // WETH metrics
+        wethAccumulated: blazerState.wethAccumulated.toString(),
+        wethAccumulatedFormatted: ethers.utils.formatEther(blazerState.wethAccumulated),
+        wethBalance: blazerState.wethBalance.toString(),
+        wethBalanceFormatted: ethers.utils.formatEther(blazerState.wethBalance),
+        
+        // LP token balance in contract
+        paymentTokenBalance: blazerState.paymentTokenBalance.toString(),
+        paymentTokenBalanceFormatted: ethers.utils.formatEther(blazerState.paymentTokenBalance),
+        
+        // User's LP token balance
+        userLpBalance: userLpBalance,
+        userLpBalanceFormatted: userLpBalanceFormatted
+      },
+      
       // Contract addresses
       minerContract: MINER_ADDRESS,
       multicallContract: MULTICALL_ADDRESS,
-      donutContract: donutAddress,
-      
-      // URI
-      uri: minerState.uri
+      donutContract: donutAddress
     };
 
     console.log("[get-game-state] State fetched successfully");
