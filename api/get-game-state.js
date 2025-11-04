@@ -7,7 +7,7 @@ const { NeynarAPIClient, Configuration } = require("@neynar/nodejs-sdk");
 
 // --- CONFIGURATION - UPDATED ADDRESSES ---
 const BASE_PROVIDER_URL = process.env.BASE_PROVIDER_URL;
-const MULTICALL_ADDRESS = '0xe03a89eb8b75d73Caf762a81dA260106fD42F18A'; // NEW!
+const MULTICALL_ADDRESS = '0xe03a89eb8b75d73Caf762a81dA260106fD42F18A'; // NEW MULTICALL!
 const MINER_ADDRESS = '0x9Bea9c75063095ba8C6bF60F6B50858B140bF869';
 
 // Multicall ABI - CORRECTED from actual contract ABI
@@ -29,7 +29,7 @@ const multicallAbi = [
     ) state
   )`,
   // CORRECTED: Function is called getAuction, not getBlazer
-  // Also note the typo was FIXED in new contract: wethAccumulated (two 'c's now)
+  // Also note the typo in contract: wethAcummulated (one 'c')
   `function getAuction(address account) external view returns (
     tuple(
       uint16 epochId,
@@ -38,7 +38,7 @@ const multicallAbi = [
       address paymentToken,
       uint256 price,
       uint256 paymentTokenPrice,
-      uint256 wethAccumulated,
+      uint256 wethAcummulated,
       uint256 wethBalance,
       uint256 paymentTokenBalance
     ) state
@@ -250,9 +250,9 @@ module.exports = async function handler(req, res) {
         paymentTokenPrice: auctionState.paymentTokenPrice.toString(),
         paymentTokenPriceFormatted: ethers.utils.formatEther(auctionState.paymentTokenPrice),
         
-        // WETH metrics (typo fixed in new contract: wethAccumulated)
-        wethAccumulated: auctionState.wethAccumulated.toString(),
-        wethAccumulatedFormatted: ethers.utils.formatEther(auctionState.wethAccumulated),
+        // WETH metrics (note the typo in contract: wethAcummulated)
+        wethAccumulated: auctionState.wethAcummulated.toString(),
+        wethAccumulatedFormatted: ethers.utils.formatEther(auctionState.wethAcummulated),
         wethBalance: auctionState.wethBalance.toString(),
         wethBalanceFormatted: ethers.utils.formatEther(auctionState.wethBalance),
         
