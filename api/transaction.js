@@ -18,7 +18,7 @@ export default async function handler(req, res) {
     }
 
     // --- CONFIGURATION - UPDATED FOR NEW CONTRACTS ---
-    const MULTICALL_ADDRESS = '0x3eE553912ba4262Ddd955DD5F910bA0844B16278'; // NEW!
+    const MULTICALL_ADDRESS = '0xe03a89eb8b75d73Caf762a81dA260106fD42F18A'; // NEW!
     const MINER_ADDRESS = '0x9Bea9c75063095ba8C6bF60F6B50858B140bF869';     // NEW!
     const RPC_URL = 'https://mainnet.base.org';
     const REFERRAL_PROVIDER_ADDRESS = process.env.YOUR_WALLET_ADDRESS; // Your Vercel ENV var
