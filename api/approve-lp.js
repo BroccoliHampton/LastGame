@@ -18,7 +18,7 @@ module.exports = async function handler(req, res) {
     }
 
     // --- CONFIGURATION ---
-    const MULTICALL_ADDRESS = '0x3eE553912ba4262Ddd955DD5F910bA0844B16278';
+    const MULTICALL_ADDRESS = '0xe03a89eb8b75d73Caf762a81dA260106fD42F18A'; // <- FIXED: Updated to new address
     const LP_TOKEN_ADDRESS = '0xc3b9bd6f7d4bfcc22696a7bc1cc83948a33d7fab'; // DONUT-ETH LP
 
     // ERC20 ABI for approve function
