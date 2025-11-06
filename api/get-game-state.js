@@ -125,17 +125,44 @@ module.exports = async function handler(req, res) {
     
     if (neynarClient && currentMinerAddress !== ethers.constants.AddressZero) {
         try {
+            console.log(`[get-game-state] Looking up Farcaster profile for: ${currentMinerAddress}`);
+            
             const usersData = await neynarClient.fetchBulkUsersByEthOrSolAddress({
-                addresses: [currentMinerAddress],
+                addresses: [currentMinerAddress.toLowerCase()],
                 addressTypes: ['verified_address', 'custody_address']
             });
 
-            if (usersData && usersData.users && usersData.users.length > 0) {
-                currentMinerUsername = usersData.users[0].username; 
-                console.log(`[get-game-state] Resolved username: @${currentMinerUsername}`);
+            console.log(`[get-game-state] Neynar response:`, JSON.stringify(usersData, null, 2));
+
+            // Check multiple possible response structures
+            if (usersData) {
+                // Try direct users array
+                if (usersData.users && usersData.users.length > 0) {
+                    currentMinerUsername = usersData.users[0].username;
+                }
+                // Try address-keyed response
+                else if (usersData[currentMinerAddress.toLowerCase()]) {
+                    const userData = usersData[currentMinerAddress.toLowerCase()];
+                    if (Array.isArray(userData) && userData.length > 0) {
+                        currentMinerUsername = userData[0].username;
+                    } else if (userData.username) {
+                        currentMinerUsername = userData.username;
+                    }
+                }
+                
+                if (currentMinerUsername) {
+                    console.log(`[get-game-state] ✓ Resolved username: @${currentMinerUsername}`);
+                } else {
+                    console.log(`[get-game-state] ✗ No Farcaster account found for ${currentMinerAddress}`);
+                }
             }
         } catch (e) {
             console.error("[get-game-state] Neynar lookup failed:", e.message);
+            console.error("[get-game-state] Error details:", e);
+        }
+    } else {
+        if (!neynarClient) {
+            console.log("[get-game-state] Neynar client not initialized - check NEYNAR_API_KEY");
         }
     }
 
