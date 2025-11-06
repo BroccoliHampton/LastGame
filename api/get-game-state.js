@@ -64,7 +64,6 @@ const erc20Abi = [
 let readOnlyProvider;
 let multicallContract;
 let minerContract;
-let neynarClient;
 
 // Initialize providers and contracts outside handler for reuse
 if (BASE_PROVIDER_URL) {
@@ -72,11 +71,6 @@ if (BASE_PROVIDER_URL) {
     readOnlyProvider = new ethers.providers.JsonRpcProvider(BASE_PROVIDER_URL);
     multicallContract = new ethers.Contract(MULTICALL_ADDRESS, multicallAbi, readOnlyProvider);
     minerContract = new ethers.Contract(MINER_ADDRESS, minerAbi, readOnlyProvider);
-    
-    // Initialize Neynar Client
-    if (process.env.NEYNAR_API_KEY) {
-        neynarClient = new NeynarAPIClient(new Configuration({ apiKey: process.env.NEYNAR_API_KEY }));
-    }
     
     console.log("[get-game-state] Providers initialized successfully");
   } catch (e) {
@@ -108,6 +102,19 @@ module.exports = async function handler(req, res) {
   try {
     const { userAddress } = req.query;
     const address = userAddress || ethers.constants.AddressZero;
+    
+    // Initialize Neynar client (must be done inside handler for env vars to be available)
+    let neynarClient = null;
+    if (process.env.NEYNAR_API_KEY) {
+        try {
+            neynarClient = new NeynarAPIClient(process.env.NEYNAR_API_KEY);
+            console.log("[get-game-state] Neynar client initialized successfully");
+        } catch (e) {
+            console.error("[get-game-state] Failed to initialize Neynar client:", e.message);
+        }
+    } else {
+        console.log("[get-game-state] NEYNAR_API_KEY not found in environment variables");
+    }
     
     // Fetch BOTH miner state and auction state
     // CORRECTED: Using getAuction instead of getBlazer
