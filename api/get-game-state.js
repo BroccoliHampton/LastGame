@@ -130,45 +130,50 @@ module.exports = async function handler(req, res) {
     // --- NEYNAR LOOKUP LOGIC ---
     let currentMinerUsername = null;
     
-    if (neynarClient && currentMinerAddress !== ethers.constants.AddressZero) {
+    if (process.env.NEYNAR_API_KEY && currentMinerAddress !== ethers.constants.AddressZero) {
         try {
             console.log(`[get-game-state] Looking up Farcaster profile for: ${currentMinerAddress}`);
             
-            const response = await neynarClient.fetchBulkUsersByEthOrSolAddress({
-                addresses: [currentMinerAddress.toLowerCase()],
+            // Use Neynar REST API - correct endpoint from docs
+            const neynarUrl = `https://api.neynar.com/v2/farcaster/user/bulk-by-address?addresses=${currentMinerAddress.toLowerCase()}&address_types=verified_address,custody_address`;
+            
+            const neynarResponse = await fetch(neynarUrl, {
+                method: 'GET',
+                headers: {
+                    'accept': 'application/json',
+                    'api_key': process.env.NEYNAR_API_KEY
+                }
             });
 
-            console.log(`[get-game-state] Neynar response:`, JSON.stringify(response, null, 2));
+            if (!neynarResponse.ok) {
+                const errorText = await neynarResponse.text();
+                throw new Error(`Neynar API returned ${neynarResponse.status}: ${errorText}`);
+            }
 
-            // According to Neynar docs, response structure is response.result.user or response[address]
-            if (response) {
-                // Try response.result.user (newer SDK versions)
-                if (response.result && response.result.user) {
-                    currentMinerUsername = response.result.user.username;
-                }
-                // Try direct address key (older SDK versions)
-                else if (response[currentMinerAddress.toLowerCase()]) {
-                    const userData = response[currentMinerAddress.toLowerCase()];
-                    if (Array.isArray(userData) && userData.length > 0) {
-                        currentMinerUsername = userData[0].username;
-                    } else if (userData.username) {
-                        currentMinerUsername = userData.username;
-                    }
-                }
-                
-                if (currentMinerUsername) {
+            const neynarData = await neynarResponse.json();
+            console.log(`[get-game-state] Neynar response:`, JSON.stringify(neynarData, null, 2));
+
+            // Parse response - check for address in response object
+            const lowerAddress = currentMinerAddress.toLowerCase();
+            if (neynarData && neynarData[lowerAddress]) {
+                const users = neynarData[lowerAddress];
+                if (Array.isArray(users) && users.length > 0) {
+                    currentMinerUsername = users[0].username;
                     console.log(`[get-game-state] ✓ Resolved username: @${currentMinerUsername}`);
                 } else {
-                    console.log(`[get-game-state] ✗ No Farcaster account found for ${currentMinerAddress}`);
+                    console.log(`[get-game-state] ✗ No users array for address`);
                 }
+            } else {
+                console.log(`[get-game-state] ✗ No Farcaster account found for ${currentMinerAddress}`);
+                console.log(`[get-game-state] Response keys:`, Object.keys(neynarData || {}));
             }
         } catch (e) {
             console.error("[get-game-state] Neynar lookup failed:", e.message);
-            console.error("[get-game-state] Error details:", e);
+            console.error("[get-game-state] Error stack:", e.stack);
         }
     } else {
-        if (!neynarClient) {
-            console.log("[get-game-state] Neynar client not initialized - check NEYNAR_API_KEY");
+        if (!process.env.NEYNAR_API_KEY) {
+            console.log("[get-game-state] NEYNAR_API_KEY not found in environment variables");
         }
     }
 
