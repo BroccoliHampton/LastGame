@@ -134,22 +134,21 @@ module.exports = async function handler(req, res) {
         try {
             console.log(`[get-game-state] Looking up Farcaster profile for: ${currentMinerAddress}`);
             
-            const usersData = await neynarClient.fetchBulkUsersByEthOrSolAddress({
+            const response = await neynarClient.fetchBulkUsersByEthOrSolAddress({
                 addresses: [currentMinerAddress.toLowerCase()],
-                addressTypes: ['verified_address', 'custody_address']
             });
 
-            console.log(`[get-game-state] Neynar response:`, JSON.stringify(usersData, null, 2));
+            console.log(`[get-game-state] Neynar response:`, JSON.stringify(response, null, 2));
 
-            // Check multiple possible response structures
-            if (usersData) {
-                // Try direct users array
-                if (usersData.users && usersData.users.length > 0) {
-                    currentMinerUsername = usersData.users[0].username;
+            // According to Neynar docs, response structure is response.result.user or response[address]
+            if (response) {
+                // Try response.result.user (newer SDK versions)
+                if (response.result && response.result.user) {
+                    currentMinerUsername = response.result.user.username;
                 }
-                // Try address-keyed response
-                else if (usersData[currentMinerAddress.toLowerCase()]) {
-                    const userData = usersData[currentMinerAddress.toLowerCase()];
+                // Try direct address key (older SDK versions)
+                else if (response[currentMinerAddress.toLowerCase()]) {
+                    const userData = response[currentMinerAddress.toLowerCase()];
                     if (Array.isArray(userData) && userData.length > 0) {
                         currentMinerUsername = userData[0].username;
                     } else if (userData.username) {
