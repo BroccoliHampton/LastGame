@@ -60,7 +60,7 @@ export default async function handler(req, res) {
         epochId,                            // 2. epochId: Current epoch ID
         currentTime + 300,                  // 3. deadline: 5 minutes from now
         price,                              // 4. maxPrice: Current price (no slippage allowed)
-        "Donut Miner on Farcaster"          // 5. uri: The URI string
+        "Current Glaze Brought To You By Pinky Glazers"          // 5. uri: The URI string
     ];
 
     // --- ENCODE FUNCTION DATA ---
