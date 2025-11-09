@@ -27,7 +27,7 @@ module.exports = async function handler(req, res) {
     }
 
     // --- CONFIGURATION ---
-    const MULTICALL_ADDRESS = '0xe03a89eb8b75d73Caf762a81dA260106fD42F18A'; // <- NEW ADDRESS
+    const MULTICALL_ADDRESS = '0x7a85CA4b4E15df2a7b927Fa56edb050d2399B34c'; // <- NEW ADDRESS
     const RPC_URL = 'https://mainnet.base.org';
 
     // --- MULTICALL ABI - buy() function + read functions ---
