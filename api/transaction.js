@@ -18,8 +18,8 @@ export default async function handler(req, res) {
     }
 
     // --- CONFIGURATION - UPDATED FOR NEW CONTRACTS ---
-    const MULTICALL_ADDRESS = '0xe03a89eb8b75d73Caf762a81dA260106fD42F18A'; // <- NEW ADDRESS
-    const MINER_ADDRESS = '0x9Bea9c75063095ba8C6bF60F6B50858B140bF869';     // NEW!
+    const MULTICALL_ADDRESS = '0x7a85CA4b4E15df2a7b927Fa56edb050d2399B34c'; // <- NEW ADDRESS
+    const MINER_ADDRESS = '0xF69614F4Ee8D4D3879dd53d5A039eB3114C794F6';     // NEW!
     const RPC_URL = 'https://mainnet.base.org';
     const REFERRAL_PROVIDER_ADDRESS = process.env.YOUR_WALLET_ADDRESS; // Your Vercel ENV var
 
