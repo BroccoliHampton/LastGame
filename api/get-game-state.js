@@ -9,7 +9,7 @@ const { NeynarAPIClient, Configuration } = require("@neynar/nodejs-sdk");
 // --- CONFIGURATION - UPDATED ADDRESSES ---
 const BASE_PROVIDER_URL = process.env.BASE_PROVIDER_URL;
 const MULTICALL_ADDRESS = '0x7a85CA4b4E15df2a7b927Fa56edb050d2399B34c';
-const MINER_ADDRESS = '0x9Bea9c75063095ba8C6bF60F6B50858B140bF869';
+const MINER_ADDRESS = '0xF69614F4Ee8D4D3879dd53d5A039eB3114C794F6';
 
 // Multicall ABI - FULL VERSION with both getMiner and getAuction
 const multicallAbi = [
