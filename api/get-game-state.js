@@ -1,5 +1,6 @@
 //
-// api/get-game-state.js - MODIFIED to skip Auction until deployed
+// api/get-game-state.js - FULL VERSION with Blaze/Auction enabled
+// USE THIS VERSION AFTER DEPLOYING AUCTION CONTRACT AND CALLING setAuction()
 //
 const { ethers } = require("ethers");
 // Import Neynar SDK
@@ -8,9 +9,9 @@ const { NeynarAPIClient, Configuration } = require("@neynar/nodejs-sdk");
 // --- CONFIGURATION - UPDATED ADDRESSES ---
 const BASE_PROVIDER_URL = process.env.BASE_PROVIDER_URL;
 const MULTICALL_ADDRESS = '0x7a85CA4b4E15df2a7b927Fa56edb050d2399B34c';
-const MINER_ADDRESS = '0xF69614F4Ee8D4D3879dd53d5A039eB3114C794F6';
+const MINER_ADDRESS = '0x9Bea9c75063095ba8C6bF60F6B50858B140bF869';
 
-// Multicall ABI - ONLY getMiner for now
+// Multicall ABI - FULL VERSION with both getMiner and getAuction
 const multicallAbi = [
   `function getMiner(address account) external view returns (
     tuple(
@@ -27,9 +28,20 @@ const multicallAbi = [
       uint256 wethBalance,
       uint256 donutBalance
     ) state
+  )`,
+  `function getAuction(address account) external view returns (
+    tuple(
+      uint16 epochId,
+      uint192 initPrice,
+      uint40 startTime,
+      address paymentToken,
+      uint256 price,
+      uint256 paymentTokenPrice,
+      uint256 wethAccumulated,
+      uint256 wethBalance,
+      uint256 paymentTokenBalance
+    ) state
   )`
-  // Auction function commented out until Auction contract is deployed
-  // `function getAuction(address account) external view returns (...)`
 ];
 
 const minerAbi = [
@@ -40,6 +52,12 @@ const minerAbi = [
 
 const donutAbi = [
   "function totalSupply() external view returns (uint256)"
+];
+
+// ERC20 ABI for LP token balance and allowance
+const erc20Abi = [
+  "function balanceOf(address account) external view returns (uint256)",
+  "function allowance(address owner, address spender) external view returns (uint256)"
 ];
 
 let readOnlyProvider;
@@ -84,7 +102,7 @@ module.exports = async function handler(req, res) {
     const { userAddress } = req.query;
     const address = userAddress || ethers.constants.AddressZero;
     
-    // Initialize Neynar client
+    // Initialize Neynar client (must be done inside handler for env vars to be available)
     let neynarClient = null;
     if (process.env.NEYNAR_API_KEY) {
         try {
@@ -97,11 +115,13 @@ module.exports = async function handler(req, res) {
         console.log("[get-game-state] NEYNAR_API_KEY not found in environment variables");
     }
     
-    // Fetch ONLY miner state (skip auction for now)
-    console.log("[get-game-state] Fetching miner state only...");
-    const minerState = await multicallContract.getMiner(address);
+    // Fetch BOTH miner state and auction state
+    const [minerState, auctionState] = await Promise.all([
+      multicallContract.getMiner(address),
+      multicallContract.getAuction(address)
+    ]);
     
-    console.log("[get-game-state] Miner state fetched successfully");
+    console.log("[get-game-state] Miner and Auction states fetched successfully");
     
     const currentMinerAddress = minerState.miner;
     
@@ -112,6 +132,7 @@ module.exports = async function handler(req, res) {
         try {
             console.log(`[get-game-state] Looking up Farcaster profile for: ${currentMinerAddress}`);
             
+            // Use Neynar REST API - correct endpoint from docs
             const neynarUrl = `https://api.neynar.com/v2/farcaster/user/bulk-by-address?addresses=${currentMinerAddress.toLowerCase()}&address_types=verified_address,custody_address`;
             
             const neynarResponse = await fetch(neynarUrl, {
@@ -128,17 +149,29 @@ module.exports = async function handler(req, res) {
             }
 
             const neynarData = await neynarResponse.json();
+            console.log(`[get-game-state] Neynar response:`, JSON.stringify(neynarData, null, 2));
 
+            // Parse response - check for address in response object
             const lowerAddress = currentMinerAddress.toLowerCase();
             if (neynarData && neynarData[lowerAddress]) {
                 const users = neynarData[lowerAddress];
                 if (Array.isArray(users) && users.length > 0) {
                     currentMinerUsername = users[0].username;
                     console.log(`[get-game-state] ✓ Resolved username: @${currentMinerUsername}`);
+                } else {
+                    console.log(`[get-game-state] ✗ No users array for address`);
                 }
+            } else {
+                console.log(`[get-game-state] ✗ No Farcaster account found for ${currentMinerAddress}`);
+                console.log(`[get-game-state] Response keys:`, Object.keys(neynarData || {}));
             }
         } catch (e) {
             console.error("[get-game-state] Neynar lookup failed:", e.message);
+            console.error("[get-game-state] Error stack:", e.stack);
+        }
+    } else {
+        if (!process.env.NEYNAR_API_KEY) {
+            console.log("[get-game-state] NEYNAR_API_KEY not found in environment variables");
         }
     }
 
@@ -154,6 +187,37 @@ module.exports = async function handler(req, res) {
         })()
     ]);
 
+    // Get user's LP token balance and approval status if address is provided
+    let userLpBalance = "0";
+    let userLpBalanceFormatted = "0.0";
+    let userNeedsApproval = true; // Default to true
+    
+    if (address !== ethers.constants.AddressZero && auctionState.paymentToken !== ethers.constants.AddressZero) {
+        try {
+            const lpTokenContract = new ethers.Contract(auctionState.paymentToken, erc20Abi, readOnlyProvider);
+            
+            // Get user's LP token balance
+            const balance = await lpTokenContract.balanceOf(address);
+            userLpBalance = balance.toString();
+            userLpBalanceFormatted = ethers.utils.formatEther(balance);
+            console.log("[get-game-state] User LP balance:", userLpBalanceFormatted);
+            
+            // Check if user has approved the Multicall contract
+            const allowance = await lpTokenContract.allowance(address, MULTICALL_ADDRESS);
+            const priceNeeded = ethers.BigNumber.from(auctionState.price);
+            
+            // User needs approval if allowance is less than price needed
+            userNeedsApproval = allowance.lt(priceNeeded);
+            
+            console.log("[get-game-state] LP Allowance:", ethers.utils.formatEther(allowance));
+            console.log("[get-game-state] Price needed:", ethers.utils.formatEther(priceNeeded));
+            console.log("[get-game-state] User needs approval:", userNeedsApproval);
+            
+        } catch (e) {
+            console.error("[get-game-state] Failed to fetch LP balance/allowance:", e.message);
+        }
+    }
+
     // Calculate time until next halving
     const currentTime = Math.floor(Date.now() / 1000);
     const timeSinceStart = currentTime - contractStartTime.toNumber();
@@ -164,7 +228,7 @@ module.exports = async function handler(req, res) {
     // Time as miner
     const timeAsMiner = Math.max(0, currentTime - minerState.startTime);
 
-    // Format response - WITHOUT blaze data
+    // Format response
     const response = {
       // ========== GLAZERY STATE ==========
       epochId: minerState.epochId,
@@ -207,33 +271,37 @@ module.exports = async function handler(req, res) {
       // URI
       uri: minerState.uri,
 
-      // ========== BLAZE/AUCTION STATE - PLACEHOLDER ==========
-      // Return empty/default blaze data until Auction contract is deployed
+      // ========== BLAZE/AUCTION STATE ==========
       blaze: {
-        epochId: 0,
-        initPrice: "0",
-        startTime: 0,
-        paymentToken: ethers.constants.AddressZero,
+        epochId: auctionState.epochId,
+        initPrice: auctionState.initPrice.toString(),
+        startTime: auctionState.startTime,
+        paymentToken: auctionState.paymentToken,
         
-        price: "0",
-        priceFormatted: "0.0",
+        // Current auction price (in LP tokens)
+        price: auctionState.price.toString(),
+        priceFormatted: ethers.utils.formatEther(auctionState.price),
         
-        paymentTokenPrice: "0",
-        paymentTokenPriceFormatted: "0.0",
+        // LP token price
+        paymentTokenPrice: auctionState.paymentTokenPrice.toString(),
+        paymentTokenPriceFormatted: ethers.utils.formatEther(auctionState.paymentTokenPrice),
         
-        wethAccumulated: "0",
-        wethAccumulatedFormatted: "0.0",
-        wethBalance: "0",
-        wethBalanceFormatted: "0.0",
+        // WETH metrics
+        wethAccumulated: auctionState.wethAccumulated.toString(),
+        wethAccumulatedFormatted: ethers.utils.formatEther(auctionState.wethAccumulated),
+        wethBalance: auctionState.wethBalance.toString(),
+        wethBalanceFormatted: ethers.utils.formatEther(auctionState.wethBalance),
         
-        paymentTokenBalance: "0",
-        paymentTokenBalanceFormatted: "0.0",
+        // LP token balance in contract
+        paymentTokenBalance: auctionState.paymentTokenBalance.toString(),
+        paymentTokenBalanceFormatted: ethers.utils.formatEther(auctionState.paymentTokenBalance),
         
-        userLpBalance: "0",
-        userLpBalanceFormatted: "0.0",
+        // User's LP token balance
+        userLpBalance: userLpBalance,
+        userLpBalanceFormatted: userLpBalanceFormatted,
         
-        // Keep approval as true so button shows "Approve LP" (disabled state)
-        userNeedsApproval: true
+        // *** CRITICAL: Approval status ***
+        userNeedsApproval: userNeedsApproval
       },
       
       // Contract addresses
@@ -242,7 +310,7 @@ module.exports = async function handler(req, res) {
       donutContract: donutAddress
     };
 
-    console.log("[get-game-state] State fetched successfully (Blaze disabled temporarily)");
+    console.log("[get-game-state] State fetched successfully with Blaze data");
     res.status(200).json(response);
 
   } catch (error) {
